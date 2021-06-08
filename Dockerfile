@@ -7,8 +7,9 @@ COPY requirements.txt requirements.txt
 
 # install packages
 RUN apt-get update && \
- apt-get install -y --no-install-recommends \
+ apt-get install -y \
 	ncdu \
+	wget python xz-utils xdg-utils libgl1-mesa-glx calibre \
 	python3 \
 	python3-dev \
 	python3-pip \
@@ -33,8 +34,6 @@ RUN apt-get update && \
 
 
 
-
-
 COPY bottorrent.py /app/bottorrent.py
 COPY root/ /
 
@@ -42,6 +41,5 @@ RUN chmod 777 /app/bottorrent.py
 RUN chmod 777 -R /etc/services.d/
  
 
-
-VOLUME /download /watch
+VOLUME /books /output
 
