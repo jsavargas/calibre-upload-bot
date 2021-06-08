@@ -4,12 +4,13 @@ services:
 
   calibre-bot:
     image: jsavargas/calibre-upload-bot
-    container_name: calibre-bot 
+    container_name: calibre-bot
     restart: unless-stopped
     network_mode: host
     environment:
       - 'PUID=1000'
       - 'PGID=1000'
+      - 'TG_CONVERTS_BOOKS=True' #True or False
       - 'TG_AUTHORIZED_USER_ID='
       - 'TG_API_ID='
       - 'TG_API_HASH='
