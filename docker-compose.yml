@@ -15,8 +15,8 @@ services:
       - 'TG_API_ID='
       - 'TG_API_HASH='
       - 'TG_BOT_TOKEN='
+      - 'TZ=America/Santiago'
     volumes:
-      - "/etc/localtime:/etc/localtime:ro"
       - /media/volume_1/books/biblioteca_88.234:/books
       - /media/volume_1/books/mobi:/output
 

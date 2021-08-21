@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.11"
+VERSION = "VERSION 1.12.2"
 HELP = """
 /help		: Esta pantalla.
 /autor AUTOR : search autor  
@@ -73,6 +73,8 @@ queue = asyncio.Queue()
 number_of_parallel_downloads = int(os.environ.get('TG_MAX_PARALLEL',4))
 maximum_seconds_per_download = int(os.environ.get('TG_DL_TIMEOUT',3600))
 
+max_text = 1020
+
 temp_completed_path = ''
 
 
@@ -141,15 +143,17 @@ async def getBooksbyID(con,message,id):
 	cursorObj = con.cursor() 
 	#cursorObj.execute('SELECT id,title,author_sort,path FROM books WHERE id = "{}"'.format(id))
 
-	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover
+	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
 							from books
 							INNER JOIN data	
 							ON books.id = data.book
-							where books.id = {} 
+							INNER JOIN comments
+							ON books.id = comments.book
+							where books.id = {} and books.id = comments.book
 							order by books.author_sort,books.title limit 1'''.format(id))
 
 	for row in cursorObj.fetchall():
-		id,author_sort,title,path,name,format,has_cover = row
+		id,author_sort,title,path,name,format,has_cover,text = row
 		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
 		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
@@ -157,7 +161,8 @@ async def getBooksbyID(con,message,id):
 			await msg.edit('Enviando archivo...')
 			loop = asyncio.get_event_loop()
 			if os.path.exists(cover):
-				await client.send_file(CID, cover)
+				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+				await client.send_file(CID, cover, caption=resena)
 				await tg_send_file(CID,file,name)
 				mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
 
@@ -425,13 +430,15 @@ async def getAllBooksbyAutor(con,message,BooksbyAutor):
 		return 
 
 	cursorObj.execute('''	select books.id, books.author_sort, books.title, 
-								books.path, data.name, data.format, books.has_cover
+								books.path, data.name, data.format, books.has_cover, comments.text
 							from books
 							INNER JOIN data	
 							ON books.id = data.book
 							INNER JOIN books_authors_link
 							ON books_authors_link.book = books.id
-							where books_authors_link.author = {}
+							INNER JOIN comments
+							ON books.id = comments.book
+							where books_authors_link.author = {} and books.id = comments.book
 							order by books.author_sort,books.title 
 							limit 50						
 					'''.format(BooksbyAutor))
@@ -445,14 +452,15 @@ async def getAllBooksbyAutor(con,message,BooksbyAutor):
 	sending = 0
 	for row in rows:
 		sending +=1
-		id,author_sort,title,path,name,format,has_cover = row
+		id,author_sort,title,path,name,format,has_cover,text = row
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
 		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
 		if os.path.exists(file):
 			await msg.edit('Enviando [{}/{}] {}...'.format(sending,len(rows),title))
 			loop = asyncio.get_event_loop()
 			if os.path.exists(cover):
-				await client.send_file(CID, cover)
+				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+				await client.send_file(CID, cover,caption=resena)
 				await tg_send_file(CID,file,name)
 
 
@@ -636,7 +644,6 @@ async def handler(update):
 	global FOLDER_GROUP
 	try:
 
-		logger.info("NewMessage[%s]" % (update.message.message))
 
 		real_id = get_peer_id(update.message.peer_id)
 		CID , peer_type = resolve_id(real_id)
@@ -657,7 +664,7 @@ async def handler(update):
 				logger.info('Search in queue...')
 
 		
-		else:
+		elif update.message.message == '/me': 
 			logger.info('UNAUTHORIZED USER: %s ', CID)
 			message = await update.reply('UNAUTHORIZED USER: %s \n add this ID to TG_AUTHORIZED_USER_ID' % CID)
 	except Exception as e:
