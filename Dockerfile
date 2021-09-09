@@ -19,7 +19,6 @@ RUN apt-get update && \
 
 
 
-
 COPY bottorrent.py /app/bottorrent.py
 COPY root/ /
 
