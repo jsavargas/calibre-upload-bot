@@ -1,13 +1,33 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.12.2"
+VERSION = "VERSION 1.13.1"
 HELP = """
-/help		: Esta pantalla.
-/autor AUTOR : search autor  
-/title TITLE : search books by title  
-/serie SERIE : search series  
-/all TITLE OR AUTOR : search books by autor or title  
+Bienvenid@ este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
+
+¿Como se usa este bot? Muy simple, puedes pedirle que busque por autor /autor y nombre del autor, apellido o nombre, ejemplo:
+/autor Stephen King 
+/autor Stephen 
+/autor King 
+
+También puedes buscar por título del libro o por una parte de este, ejemplo:
+/title La historia de Lisey
+/title Lisey
+/title historia de Lisey
+
+También puedes buscar por series o por una parte de esta, ejemplo:
+/serie el señor de los anillos
+/serie señor de los anillos
+/serie anillos
+
+También puedes buscar por autor y título del libro usando el comando /all, ejemplo:
+/all Tolkien
+
+Y también puedes buscar series por autor y te buscará todas las series de ese autor, ejemplo: 
+/serieautor Stephen King
+/serieautor Anne Rice
+/serieautor Tolkien
+
 """
 UPDATE = """BASADO EN EL BOT DE @DekkaR - 2021:
 - UPLOAD BOOKS IN CALIBRE LIBRARY DB ('metadata.db') /books => ../Calibre Library:/books
@@ -268,10 +288,11 @@ async def getSeries(con,message,title):
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando Series...')
 
-	if title != '/serie': 
-		cursorObj.execute('''select series.id, series.name, series.sort from series
+	if title != '/serie' and title != '/series': 
+		cursorObj.execute('''select series.id, series.name, series.sort 
+                    			from series
 								where series.sort LIKE '%{}%' 
-							limit 30 '''.format(title))
+								limit 30 '''.format(title))
 	else:
 		cursorObj.execute('''select series.id, series.name, series.sort from series
 							 ORDER BY RANDOM()
@@ -295,6 +316,67 @@ async def getSeries(con,message,title):
 		await msg.edit("Seleccione una Serie:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
+async def getSeriesbyAutor(con,message,title):
+
+	logger.info("getSeriesbyAutor[{}]".format(title))
+	cursorObj = con.cursor()
+	msg = await message.edit('Buscando Series...')
+
+	if title != '/serieautor': 
+		cursorObj.execute('''select 
+                    			books.id, 
+                       			books.author_sort,
+                          		series.name,
+								books_series_link.series,
+        						books_authors_link.author,
+              					count(books.series_index) as count
+							from books
+								INNER JOIN books_authors_link
+								ON books_authors_link.book = books.id
+								INNER JOIN books_series_link
+								ON books_series_link.book = books.id
+								INNER JOIN series
+								ON series.id = books_series_link.series
+								where books.author_sort like "%{}%"
+								GROUP BY books_series_link.series
+								order by books.author_sort,books_series_link.series
+								limit 30
+						'''.format(title))
+	else:
+		cursorObj.execute('''select books.id, books.author_sort,series.name,
+							books_series_link.series,books_authors_link.author,count(books.series_index) as count
+							from books
+							INNER JOIN books_authors_link
+							ON books_authors_link.book = books.id
+							INNER JOIN books_series_link
+							ON books_series_link.book = books.id
+							INNER JOIN series
+							ON series.id = books_series_link.series
+							--where books.author_sort like "%king%"
+							GROUP BY books_series_link.series
+							order by RANDOM() limit 50'''.format(title))
+
+
+	__rows = cursorObj.fetchall()
+	rows = sorted(__rows, key=lambda __rows: __rows[1])
+
+	if rows: await msg.edit('Enviando {} resultados....'.format(len(rows)))
+	
+	temp = ''
+	sending = 0
+	for row in rows:
+		sending +=1
+		id, author_sort, name, series, author, count = row
+		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
+		#temp += f"[{sending}] \U0001F4DA {author_sort} - {name}({count}) /s{series}a{author} \n"
+		temp += f"[{sending}] \U0001F4DA {author_sort} - {name} ({count}) /se{series} \n"
+
+	if rows:
+		await msg.edit("Seleccione una Serie:\n" + temp)
+	else: await msg.edit('No se encontraron resultados')
+
+
+
 async def getBooksbyAutor(con,message,BooksbyAutor):
 
 	logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
@@ -313,14 +395,14 @@ async def getBooksbyAutor(con,message,BooksbyAutor):
 							ON books_authors_link.book = books.id
 							where books_authors_link.author = {}
 							order by books.author_sort,books.title 
-							limit 50						
+							-- limit 150						
 					'''.format(BooksbyAutor))
 
 	rows = cursorObj.fetchall()
 
 	if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
 	
-	temp = ''
+	__temp = ''
 	
 	sending = 0
 	for row in rows:
@@ -328,10 +410,20 @@ async def getBooksbyAutor(con,message,BooksbyAutor):
 		id,author_sort,title,path,name,format = row
 		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending, name,id)
+		__temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending, name,id)
 
 	if rows:
-		await msg.edit("Seleccione un libro para descargar: /tdax{}\n{}".format(BooksbyAutor,temp))
+		#await msg.edit("Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,temp))
+
+		tmp = "Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,__temp)
+		text, entities = markdown.parse(tmp)
+
+		for text, entities in split_text(text, entities):
+			await message.reply(text, formatting_entities=entities)
+
+  
+  
+  
 	else: await msg.edit('No se encontraron resultados')
 
 async def getBooksbySeries(con,message,getBooksbySeries):
@@ -560,9 +652,14 @@ async def worker(name):
 					logger.info("SEND BOOKS /autor:[%s]",msg)
 					rest = await getAuthors(con,message,msg.replace('/autor ',''))
 					
+				elif ((update.message.message).startswith('/serieautor')):
+					logger.info("SEND serieautor :[%s]",msg)
+					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''))
+
 				elif ((update.message.message).startswith('/serie')):
 					logger.info("SEND SERIES :[%s]",msg)
-					rest = await getSeries(con,message,msg.replace('/serie ',''))
+					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''))
+
 
 				
 				
@@ -570,10 +667,10 @@ async def worker(name):
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbyID(con,message,m.group(1))
-						await update.reply('Todos los archivos enviados')
+						#await update.reply('Todos los archivos enviados')
 					else:
 						rest = await getBooksbyID(con,message,msg.replace('/bm',''))
-						await update.reply('Todos los archivos enviados')
+						#await update.reply('Todos los archivos enviados')
 		
 				elif ((update.message.message).startswith('/ax')):
 					m = re.search('/ax(.+?)(?=@).*', msg)
@@ -599,30 +696,30 @@ async def worker(name):
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbyAutor(con,message,m.group(1))
-						await update.reply('Todos los archivos enviados')
+						#await update.reply('Todos los archivos enviados')
 					else:
 						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''))
-						await update.reply('Todos los archivos enviados')
+						#await update.reply('Todos los archivos enviados')
 
 				elif ((update.message.message).startswith('/tdse')):
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbySeries(con,message,m.group(1))
-						await update.reply('Todos los archivos enviados')
+						#await update.reply('Todos los archivos enviados')
 					else:
 						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
-						await update.reply('Todos los archivos enviados')
+						#await update.reply('Todos los archivos enviados')
 
 				else:
-					await message.edit('No se encontraron resultados')
+					await message.edit('Busqueda incorrecta, use /help para más ayuda')
 
 				command_tasks.remove(update.message.message)
-				logger.info(command_tasks)
+				#logger.info(command_tasks)
 			else:
 				logger.info('EXIST ELEMENTE: %s ', update.message.message)
 				message = await message.edit('Ya existe una busqueda con estos parametros...')
 
-			logger.info(f"OUT worker ['worker']")
+			#logger.info(f"OUT worker ['worker']")
 
 		except Exception as e:
 			command_tasks.remove(update.message.message)
@@ -649,7 +746,7 @@ async def handler(update):
 		CID , peer_type = resolve_id(real_id)
 
 		if not TG_AUTHORIZED_USER_ID or CID in usuarios:
-			if update.message.message == '/help':
+			if update.message.message == '/help' or update.message.message == '/start':
 				message = await update.reply(HELP) 
 			elif update.message.message == '/version': 
 				message = await update.reply(VERSION)
