@@ -3,7 +3,8 @@
 
 VERSION = "VERSION 1.13.2"
 HELP = """
-Bienvenid@ este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
+Bienvenid@ 
+Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
 
 ¿Como se usa este bot? Muy simple, puedes pedirle que busque por autor /autor y nombre del autor, apellido o nombre, ejemplo:
 /autor Stephen King 
