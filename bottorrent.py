@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.3"
+VERSION = "VERSION 1.13.4"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -644,7 +644,6 @@ async def worker(name):
    
 			if update.message.message not in command_tasks:
 				command_tasks.append(update.message.message)
-				logger.info("command_tasks ==> [{}]".format(command_tasks))
 
 
 				if ((update.message.message).startswith('/title')):
@@ -781,9 +780,9 @@ try:
 	client.add_event_handler(handler)
 
 	# Pulsa Ctrl+C para detener
-	loop.run_until_complete(tg_send_message("Bot Books Upload Started"))
+	loop.run_until_complete(tg_send_message("Calibre Upload Started: {version}".format(version=VERSION)))
 	logger.info("%s" % VERSION)
-	logger.info("********** Bot Books Upload Started **********")
+	logger.info("********** Calibre Upload Started: {version} **********".format(version=VERSION))
 
 
 
