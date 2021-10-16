@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.4"
+VERSION = "VERSION 1.13.5"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -648,18 +648,26 @@ async def worker(name):
 
 				if ((update.message.message).startswith('/title')):
 					logger.info("SEND BOOKS /title")
+					message = await update.reply('Search in queue...')
+					await queue.put([update, message])
 					rest = await getBooksTitle(con,message,msg.replace('/title ',''))
 				
 				elif ((update.message.message).startswith('/autor')):
 					logger.info("SEND BOOKS /autor:[%s]",msg)
+					message = await update.reply('Search in queue...')
+					await queue.put([update, message])
 					rest = await getAuthors(con,message,msg.replace('/autor ',''))
 					
 				elif ((update.message.message).startswith('/serieautor')):
 					logger.info("SEND serieautor :[%s]",msg)
+					message = await update.reply('Search in queue...')
+					await queue.put([update, message])
 					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''))
 
 				elif ((update.message.message).startswith('/serie')):
 					logger.info("SEND SERIES :[%s]",msg)
+					message = await update.reply('Search in queue...')
+					await queue.put([update, message])
 					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''))
 
 
@@ -668,47 +676,69 @@ async def worker(name):
 				elif ((update.message.message).startswith('/bm')):
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getBooksbyID(con,message,m.group(1))
 						#await update.reply('Todos los archivos enviados')
 					else:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getBooksbyID(con,message,msg.replace('/bm',''))
 						#await update.reply('Todos los archivos enviados')
 		
 				elif ((update.message.message).startswith('/ax')):
 					m = re.search('/ax(.+?)(?=@).*', msg)
 					if m:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getBooksbyAutor(con,message,m.group(1))
 					else:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''))
 
 				elif ((update.message.message).startswith('/se')):
 					m = re.search('/se(.+?)(?=@).*', msg)
 					if m:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getBooksbySeries(con,message,m.group(1))
 					else:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getBooksbySeries(con,message,msg.replace('/se',''))
 
 
 				elif ((update.message.message).startswith('/all')):
 					logger.info("SEND BOOKS :[%s]",msg)
+					message = await update.reply('Search in queue...')
+					await queue.put([update, message])
 					rest = await getBooksAll(con,message,msg.replace('/all ',''))
 					logger.info("FINISH SEND BOOKS :[%s]",msg)
 
 				elif ((update.message.message).startswith('/tdax')):
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getAllBooksbyAutor(con,message,m.group(1))
 						#await update.reply('Todos los archivos enviados')
 					else:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''))
 						#await update.reply('Todos los archivos enviados')
 
 				elif ((update.message.message).startswith('/tdse')):
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getAllBooksbySeries(con,message,m.group(1))
 						#await update.reply('Todos los archivos enviados')
 					else:
+						message = await update.reply('Search in queue...')
+						await queue.put([update, message])
 						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
 						#await update.reply('Todos los archivos enviados')
 
@@ -754,10 +784,7 @@ async def handler(update):
 				message = await update.reply('id: {}'.format(CID) )
 
 			elif ((update.message.message).startswith('/')):
-				message = await update.reply('Search in queue...')
-				await queue.put([update, message])
-				logger.info('Search in queue...')
-
+				await queue.put([update, update.message.message])
 		
 		elif update.message.message == '/me' or update.message.message == '/id': 
 			logger.info('UNAUTHORIZED USER: %s ', CID)
