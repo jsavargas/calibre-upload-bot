@@ -16,5 +16,7 @@ User PGID:    $(id -g abc)
 -------------------------------------
 "
 chown -R abc:abc /app
+chown abc:abc /download
+chown abc:abc /watch
 
 chmod 777 /app/bottorrent.py

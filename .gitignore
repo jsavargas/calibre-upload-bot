@@ -1,3 +1,10 @@
-*~
-docker-compose.yml
+
+*.testing
+
+Dockerfile.python
+
 docker-compose.yaml
+
+*~
+
+docker-compose.yml
