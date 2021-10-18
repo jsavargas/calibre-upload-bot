@@ -10,13 +10,13 @@ services:
     environment:
       - 'PUID=1000'
       - 'PGID=1000'
-      - 'TG_CONVERTS_BOOKS=True' #Convert epub to mobi? True or False
-      - 'TG_AUTHORIZED_USER_ID=' #your telegram id, to be used only by the indicated id
+      - 'TG_CONVERTS_BOOKS=True' #True or False
+      - 'TG_AUTHORIZED_USER_ID='
       - 'TG_API_ID='
       - 'TG_API_HASH='
       - 'TG_BOT_TOKEN='
       - 'TZ=America/Santiago'
     volumes:
-      - /media/volume_1/books/biblioteca_88.234:/books  # Calibre folder (library) where the database is located (metadata.db)
-      - /media/volume_1/books/mobi:/output              # folder where the epub converted to mobi will be left
+      - /media/volume_1/books/biblioteca_88.234:/books
+      - /media/volume_1/books/mobi:/output
 
