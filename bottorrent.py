@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.4"
+VERSION = "VERSION 1.13.9"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -635,15 +635,14 @@ async def worker(name):
 			
 			msg = update.message.message
 
+			logger.info("worker ==> [{}]".format(update.message.message))
+
 			real_id = get_peer_id(update.message.peer_id)
 			CID , peer_type = resolve_id(real_id)
-			sender = await update.get_sender()
-			username = sender.username
 
-			logger.info("worker ==> [{id}][{username}][{message}]".format(message=msg,id=CID,username=username))
-   
 			if update.message.message not in command_tasks:
 				command_tasks.append(update.message.message)
+				logger.info("command_tasks ==> [{}]".format(command_tasks))
 
 
 				if ((update.message.message).startswith('/title')):
@@ -712,12 +711,16 @@ async def worker(name):
 						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
 						#await update.reply('Todos los archivos enviados')
 
+				else:
+					await message.edit('Busqueda incorrecta, use /help para más ayuda')
+
 				command_tasks.remove(update.message.message)
 				#logger.info(command_tasks)
 			else:
 				logger.info('EXIST ELEMENTE: %s ', update.message.message)
 				message = await message.edit('Ya existe una busqueda con estos parametros...')
 
+			#logger.info(f"OUT worker ['worker']")
 
 		except Exception as e:
 			command_tasks.remove(update.message.message)
@@ -750,8 +753,8 @@ async def handler(update):
 				message = await update.reply(VERSION)
 			elif update.message.message == '/alive': 
 				message = await update.reply('Keep-Alive')
-			elif update.message.message == '/me' or update.message.message == '/id': 
-				message = await update.reply('id: {}'.format(CID) )
+			elif update.message.message == '/me': 
+				message = await update.reply('me: {}'.format(CID) )
 
 			elif ((update.message.message).startswith('/')):
 				message = await update.reply('Search in queue...')
@@ -759,7 +762,7 @@ async def handler(update):
 				logger.info('Search in queue...')
 
 		
-		elif update.message.message == '/me' or update.message.message == '/id': 
+		elif update.message.message == '/me': 
 			logger.info('UNAUTHORIZED USER: %s ', CID)
 			message = await update.reply('UNAUTHORIZED USER: %s \n add this ID to TG_AUTHORIZED_USER_ID' % CID)
 	except Exception as e:
@@ -780,9 +783,9 @@ try:
 	client.add_event_handler(handler)
 
 	# Pulsa Ctrl+C para detener
-	loop.run_until_complete(tg_send_message("Calibre Upload Started: {version}".format(version=VERSION)))
+	loop.run_until_complete(tg_send_message("Bot Books Upload Started"))
 	logger.info("%s" % VERSION)
-	logger.info("********** Calibre Upload Started: {version} **********".format(version=VERSION))
+	logger.info("********** Bot Books Upload Started **********")
 
 
 

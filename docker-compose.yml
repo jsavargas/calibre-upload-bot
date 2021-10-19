@@ -17,6 +17,7 @@ services:
       - 'TG_BOT_TOKEN='
       - 'TZ=America/Santiago'
     volumes:
+      - /path/to/config:/config
       - /media/volume_1/books/biblioteca_88.234:/books  # Calibre folder (library) where the database is located (metadata.db)
       - /media/volume_1/books/mobi:/output              # folder where the epub converted to mobi will be left
 
