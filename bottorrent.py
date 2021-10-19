@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.10"
+VERSION = "VERSION 1.13.11"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -646,18 +646,22 @@ async def worker(name):
 
 
 				if ((update.message.message).startswith('/title')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /title")
 					rest = await getBooksTitle(con,message,msg.replace('/title ',''))
 				
 				elif ((update.message.message).startswith('/autor')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /autor:[%s]",msg)
 					rest = await getAuthors(con,message,msg.replace('/autor ',''))
 					
 				elif ((update.message.message).startswith('/serieautor')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND serieautor :[%s]",msg)
 					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''))
 
 				elif ((update.message.message).startswith('/serie')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND SERIES :[%s]",msg)
 					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''))
 
@@ -665,6 +669,7 @@ async def worker(name):
 				
 				
 				elif ((update.message.message).startswith('/bm')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbyID(con,message,m.group(1))
@@ -674,6 +679,7 @@ async def worker(name):
 						#await update.reply('Todos los archivos enviados')
 		
 				elif ((update.message.message).startswith('/ax')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/ax(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbyAutor(con,message,m.group(1))
@@ -681,6 +687,7 @@ async def worker(name):
 						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''))
 
 				elif ((update.message.message).startswith('/se')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/se(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbySeries(con,message,m.group(1))
@@ -689,11 +696,13 @@ async def worker(name):
 
 
 				elif ((update.message.message).startswith('/all')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS :[%s]",msg)
 					rest = await getBooksAll(con,message,msg.replace('/all ',''))
 					logger.info("FINISH SEND BOOKS :[%s]",msg)
 
 				elif ((update.message.message).startswith('/tdax')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbyAutor(con,message,m.group(1))
@@ -703,6 +712,7 @@ async def worker(name):
 						#await update.reply('Todos los archivos enviados')
 
 				elif ((update.message.message).startswith('/tdse')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbySeries(con,message,m.group(1))
@@ -711,21 +721,21 @@ async def worker(name):
 						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
 						#await update.reply('Todos los archivos enviados')
 
-				else:
-					await message.edit('Busqueda incorrecta, use /help para más ayuda')
+				#else:
+					#await message.edit('Busqueda incorrecta, use /help para más ayuda')
 
 				command_tasks.remove(update.message.message)
 				#logger.info(command_tasks)
 			else:
 				logger.info('EXIST ELEMENTE: %s ', update.message.message)
-				message = await message.edit('Ya existe una busqueda con estos parametros...')
+				message = await update.reply('Ya existe una busqueda con estos parametros...')
 
 			#logger.info(f"OUT worker ['worker']")
 
 		except Exception as e:
 			command_tasks.remove(update.message.message)
 			logger.info('ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
-			message = await message.edit('ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
+			message = await update.reply('ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
 			queue.task_done()
 			continue
 		
@@ -757,9 +767,9 @@ async def handler(update):
 				message = await update.reply('me: {}'.format(CID) )
 
 			elif ((update.message.message).startswith('/')):
-				message = await update.reply('Search in queue...')
-				await queue.put([update, message])
-				logger.info('Search in queue...')
+				#message = await update.reply('Search in queue...')
+				await queue.put([update, update.message.message])
+				#logger.info('Search in queue...')
 
 		
 		elif update.message.message == '/me': 
@@ -783,7 +793,7 @@ try:
 	client.add_event_handler(handler)
 
 	# Pulsa Ctrl+C para detener
-	loop.run_until_complete(tg_send_message("Bot Books Upload Started"))
+	loop.run_until_complete(tg_send_message("Calibre Upload Started: {version}".format(version=VERSION)))
 	logger.info("%s" % VERSION)
 	logger.info("********** Bot Books Upload Started **********")
 
