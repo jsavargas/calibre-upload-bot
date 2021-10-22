@@ -769,8 +769,8 @@ async def handler(update):
 				message = await update.reply(VERSION)
 			elif update.message.message == '/alive': 
 				message = await update.reply('Keep-Alive')
-			elif update.message.message == '/me' or update.message.message == '/id': 
-				message = await update.reply('id: {}'.format(CID) )
+			elif update.message.message == '/me': 
+				message = await update.reply('me: {}'.format(CID) )
 
 			elif ((update.message.message).startswith('/')):
 				#message = await update.reply('Search in queue...')
@@ -778,7 +778,7 @@ async def handler(update):
 				#logger.info('Search in queue...')
 
 		
-		elif update.message.message == '/me' or update.message.message == '/id': 
+		elif update.message.message == '/me': 
 			logger.info('UNAUTHORIZED USER: %s ', CID)
 			message = await update.reply('UNAUTHORIZED USER: %s \nadd this ID to TG_AUTHORIZED_USER_ID' % CID)
 	except Exception as e:
@@ -799,7 +799,7 @@ try:
 	client.add_event_handler(handler)
 
 	# Pulsa Ctrl+C para detener
-	loop.run_until_complete(tg_send_message("Calibre Upload Started: {version}".format(version=VERSION)))
+	loop.run_until_complete(tg_send_message("Bot Books Upload Started"))
 	logger.info("%s" % VERSION)
 	logger.info("********** Bot Books Upload Started **********")
 
