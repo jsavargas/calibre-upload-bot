@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.11"
+VERSION = "VERSION 1.13.12"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -123,7 +123,7 @@ async def CONVERTS_BOOKS(message,file,name):
 		if not os.path.exists(mobi):
 			logger.info("CONVERT TO MOBI: ")
 			await message.edit('Convirtiendo a mobi...')
-			process = subprocess.Popen(["ebook-convert",file,mobi], stdout=subprocess.PIPE, universal_newlines=True)
+			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
 			while True:
 				nextline = process.stdout.readline()
 				if nextline == '' and process.poll() is not None:
@@ -134,8 +134,8 @@ async def CONVERTS_BOOKS(message,file,name):
 			output = process.communicate()[0]
 			exitCode = process.returncode
 			
-			logger.info("MOBI: {}".format(mobi))
 			if os.path.exists(mobi):
+				logger.info("MOBI: {}".format(mobi))
 				await message.edit("Enviando archivo mobi...")
 				await tg_send_file(CID,mobi,name)
 		else:
