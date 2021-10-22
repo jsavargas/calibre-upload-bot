@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.9"
+VERSION = "VERSION 1.13.12"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -123,7 +123,7 @@ async def CONVERTS_BOOKS(message,file,name):
 		if not os.path.exists(mobi):
 			logger.info("CONVERT TO MOBI: ")
 			await message.edit('Convirtiendo a mobi...')
-			process = subprocess.Popen(["ebook-convert",file,mobi], stdout=subprocess.PIPE, universal_newlines=True)
+			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
 			while True:
 				nextline = process.stdout.readline()
 				if nextline == '' and process.poll() is not None:
@@ -134,8 +134,8 @@ async def CONVERTS_BOOKS(message,file,name):
 			output = process.communicate()[0]
 			exitCode = process.returncode
 			
-			logger.info("MOBI: {}".format(mobi))
 			if os.path.exists(mobi):
+				logger.info("MOBI: {}".format(mobi))
 				await message.edit("Enviando archivo mobi...")
 				await tg_send_file(CID,mobi,name)
 		else:
@@ -635,29 +635,39 @@ async def worker(name):
 			
 			msg = update.message.message
 
-			logger.info("worker ==> [{}]".format(update.message.message))
+			#logger.info("worker ==> [{}]".format(update.message.message))
 
 			real_id = get_peer_id(update.message.peer_id)
 			CID , peer_type = resolve_id(real_id)
 
+			sender = await update.get_sender()
+			username = sender.username
+
+			logger.info("worker ==> [{id}][{username}][{message}]".format(message=msg,id=CID,username=username))
+
+
 			if update.message.message not in command_tasks:
 				command_tasks.append(update.message.message)
-				logger.info("command_tasks ==> [{}]".format(command_tasks))
+				#logger.info("command_tasks ==> [{}]".format(command_tasks))
 
 
 				if ((update.message.message).startswith('/title')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /title")
 					rest = await getBooksTitle(con,message,msg.replace('/title ',''))
 				
 				elif ((update.message.message).startswith('/autor')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /autor:[%s]",msg)
 					rest = await getAuthors(con,message,msg.replace('/autor ',''))
 					
 				elif ((update.message.message).startswith('/serieautor')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND serieautor :[%s]",msg)
 					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''))
 
 				elif ((update.message.message).startswith('/serie')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND SERIES :[%s]",msg)
 					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''))
 
@@ -665,6 +675,7 @@ async def worker(name):
 				
 				
 				elif ((update.message.message).startswith('/bm')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbyID(con,message,m.group(1))
@@ -674,6 +685,7 @@ async def worker(name):
 						#await update.reply('Todos los archivos enviados')
 		
 				elif ((update.message.message).startswith('/ax')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/ax(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbyAutor(con,message,m.group(1))
@@ -681,6 +693,7 @@ async def worker(name):
 						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''))
 
 				elif ((update.message.message).startswith('/se')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/se(.+?)(?=@).*', msg)
 					if m:
 						rest = await getBooksbySeries(con,message,m.group(1))
@@ -689,11 +702,13 @@ async def worker(name):
 
 
 				elif ((update.message.message).startswith('/all')):
+					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS :[%s]",msg)
 					rest = await getBooksAll(con,message,msg.replace('/all ',''))
 					logger.info("FINISH SEND BOOKS :[%s]",msg)
 
 				elif ((update.message.message).startswith('/tdax')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbyAutor(con,message,m.group(1))
@@ -703,6 +718,7 @@ async def worker(name):
 						#await update.reply('Todos los archivos enviados')
 
 				elif ((update.message.message).startswith('/tdse')):
+					message = await update.reply('Search in queue...')
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbySeries(con,message,m.group(1))
@@ -711,21 +727,21 @@ async def worker(name):
 						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
 						#await update.reply('Todos los archivos enviados')
 
-				else:
-					await message.edit('Busqueda incorrecta, use /help para más ayuda')
+				#else:
+					#await message.edit('Busqueda incorrecta, use /help para más ayuda')
 
 				command_tasks.remove(update.message.message)
 				#logger.info(command_tasks)
 			else:
 				logger.info('EXIST ELEMENTE: %s ', update.message.message)
-				message = await message.edit('Ya existe una busqueda con estos parametros...')
+				message = await update.reply('Ya existe una busqueda con estos parametros...')
 
 			#logger.info(f"OUT worker ['worker']")
 
 		except Exception as e:
 			command_tasks.remove(update.message.message)
 			logger.info('ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
-			message = await message.edit('ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
+			message = await update.reply('ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
 			queue.task_done()
 			continue
 		
@@ -753,18 +769,18 @@ async def handler(update):
 				message = await update.reply(VERSION)
 			elif update.message.message == '/alive': 
 				message = await update.reply('Keep-Alive')
-			elif update.message.message == '/me': 
-				message = await update.reply('me: {}'.format(CID) )
+			elif update.message.message == '/me' or update.message.message == '/id': 
+				message = await update.reply('id: {}'.format(CID) )
 
 			elif ((update.message.message).startswith('/')):
-				message = await update.reply('Search in queue...')
-				await queue.put([update, message])
-				logger.info('Search in queue...')
+				#message = await update.reply('Search in queue...')
+				await queue.put([update, update.message.message])
+				#logger.info('Search in queue...')
 
 		
-		elif update.message.message == '/me': 
+		elif update.message.message == '/me' or update.message.message == '/id': 
 			logger.info('UNAUTHORIZED USER: %s ', CID)
-			message = await update.reply('UNAUTHORIZED USER: %s \n add this ID to TG_AUTHORIZED_USER_ID' % CID)
+			message = await update.reply('UNAUTHORIZED USER: %s \nadd this ID to TG_AUTHORIZED_USER_ID' % CID)
 	except Exception as e:
 		message = await update.reply('ERROR: ' + str(e))
 		logger.info('EXCEPTION USER: %s ', str(e))
@@ -783,7 +799,7 @@ try:
 	client.add_event_handler(handler)
 
 	# Pulsa Ctrl+C para detener
-	loop.run_until_complete(tg_send_message("Bot Books Upload Started"))
+	loop.run_until_complete(tg_send_message("Calibre Upload Started: {version}".format(version=VERSION)))
 	logger.info("%s" % VERSION)
 	logger.info("********** Bot Books Upload Started **********")
 
