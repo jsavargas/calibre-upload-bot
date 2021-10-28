@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.12"
+VERSION = "VERSION 1.13.15"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -41,17 +41,19 @@ import sys
 import time
 import asyncio
 import cryptg
-# Imports Telethon
-from telethon import TelegramClient, events
-from telethon.tl import types
-from telethon.utils import get_extension, get_peer_id, resolve_id, split_text
-from telethon.extensions import markdown
 import sqlite3
 import json
 import logging
 import subprocess 
 import random
 import threading
+
+# Imports Telethon
+from telethon import TelegramClient, events
+from telethon.tl import types
+from telethon.utils import get_extension, get_peer_id, resolve_id, split_text
+from telethon.extensions import markdown
+
 
 '''
 LOGGER
@@ -100,6 +102,9 @@ temp_completed_path = ''
 
 
 con = sqlite3.connect(os.path.join(TG_BOOKS_PATH,'metadata.db'))
+
+client = TelegramClient(session, api_id, api_hash, proxy = None, request_retries = 10, flood_sleep_threshold = 120)
+
 
 async def tg_send_message(msg):
     if TG_AUTHORIZED_USER_ID: await client.send_message(usuarios[0], msg)
@@ -618,6 +623,24 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	else: await msg.edit('No se encontraron resultados')
 
 
+def countBooks():
+	logger.info("countBooks[countBooks]")
+
+	cursorObj = con.cursor()
+	#msg = await message.edit('Buscando...')
+
+	cursorObj.execute(''' SELECT count(*) as count FROM books ''')
+
+	rows = cursorObj.fetchall()
+	try:
+		if rows: return rows[0][0]
+		else: return 0
+	except Exception as e:
+		return 0
+
+	#if rows: await client.send_message(usuarios[0], f'Se encontraron {rows[0][0]} libros...')
+	#else: await client.send_message(usuarios[0],'No se encontraron resultados')
+
 
 ''' ------------------------------------ '''
 ''' ------------------------------------ '''
@@ -650,6 +673,9 @@ async def worker(name):
 				command_tasks.append(update.message.message)
 				#logger.info("command_tasks ==> [{}]".format(command_tasks))
 
+
+				if ((update.message.message).startswith('/countbooks')):
+					message = await update.reply(f'Se encontraron {countBooks()} libros')
 
 				if ((update.message.message).startswith('/title')):
 					message = await update.reply('Search in queue...')
@@ -750,7 +776,6 @@ async def worker(name):
 		# Unidad de trabajo terminada.
 		queue.task_done()
 
-client = TelegramClient(session, api_id, api_hash, proxy = None, request_retries = 10, flood_sleep_threshold = 120)
 
 @events.register(events.NewMessage)
 async def handler(update):
@@ -799,7 +824,7 @@ try:
 	client.add_event_handler(handler)
 
 	# Pulsa Ctrl+C para detener
-	loop.run_until_complete(tg_send_message("Calibre Upload Started: {version}".format(version=VERSION)))
+	loop.run_until_complete(tg_send_message(f"Calibre Upload Started: \n - {VERSION}\n - Se encontraron {countBooks()} libros"))
 	logger.info("%s" % VERSION)
 	logger.info("********** Bot Books Upload Started **********")
 

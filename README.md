@@ -85,3 +85,7 @@ services:
       - /path/calibre/library:/books
       - /path//calibre/output:/output
 ```
+
+## **Changelog:**
+**v1.13.15 (28 Oct 2021):**
+- Added /countbooks
