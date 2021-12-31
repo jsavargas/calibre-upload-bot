@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.13.15"
+VERSION = "VERSION 1.14.1"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -87,6 +87,7 @@ bot_token = get_env('TG_BOT_TOKEN', 'Enter your Telegram BOT token: ')
 TG_AUTHORIZED_USER_ID = get_env('TG_AUTHORIZED_USER_ID', False)
 TG_BOOKS_PATH = get_env('TG_DOWNLOAD_PATH', '/books')
 TG_CONVERTS_BOOKS = get_env('TG_CONVERTS_BOOKS', 'True')
+TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',120))
 
 
 usuarios = list(map(int, TG_AUTHORIZED_USER_ID.replace(" ", "").split(','))) if TG_AUTHORIZED_USER_ID else False 
@@ -94,7 +95,6 @@ usuarios = list(map(int, TG_AUTHORIZED_USER_ID.replace(" ", "").split(','))) if 
 
 queue = asyncio.Queue()
 number_of_parallel_downloads = int(os.environ.get('TG_MAX_PARALLEL',4))
-maximum_seconds_per_download = int(os.environ.get('TG_DL_TIMEOUT',3600))
 
 max_text = 1020
 
@@ -126,23 +126,43 @@ async def CONVERTS_BOOKS(message,file,name):
 		mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
 
 		if not os.path.exists(mobi):
-			logger.info("CONVERT TO MOBI: ")
+			logger.info("CONVERT TO MOBI 1: ")
 			await message.edit('Convirtiendo a mobi...')
+			logger.info("CONVERT TO MOBI 2: ")
+
+			kill = lambda processss: processss.kill()
+
 			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
-			while True:
-				nextline = process.stdout.readline()
-				if nextline == '' and process.poll() is not None:
-					break
-				sys.stdout.write(nextline)
-				sys.stdout.flush()
+			logger.info("CONVERT TO MOBI 3: ")
 			
-			output = process.communicate()[0]
-			exitCode = process.returncode
-			
-			if os.path.exists(mobi):
-				logger.info("MOBI: {}".format(mobi))
-				await message.edit("Enviando archivo mobi...")
-				await tg_send_file(CID,mobi,name)
+			my_timer = threading.Timer(TG_TIMEOUT, kill, [process])
+
+			try:
+				my_timer.start()
+
+				logger.info("CONVERT TO MOBI 4: ")
+
+				while True:
+					nextline = process.stdout.readline()
+					if nextline == '' and process.poll() is not None:
+						break
+					sys.stdout.write(nextline)
+					sys.stdout.flush()
+
+
+				stdout, stderr = process.communicate()
+				exitCode = process.returncode
+				logger.info("CONVERT TO MOBI 5: ")
+
+				if os.path.exists(mobi):
+					logger.info("MOBI: {}".format(mobi))
+					await message.edit("Enviando archivo mobi...")
+					await tg_send_file(CID,mobi,name)
+			finally:
+				logger.info('CONVERTS_BOOKS TIMEOUT: Books Upload: ')
+				my_timer.cancel()
+
+
 		else:
 			await message.edit("Enviando archivo mobi...")
 			await tg_send_file(CID,mobi,name)

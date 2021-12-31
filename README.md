@@ -87,5 +87,10 @@ services:
 ```
 
 ## **Changelog:**
+**v1.14.1 (30 Dic 2021):**
+- Added TG_TIMEOUT for convert
+- Fixed bugs
+- Added more bugs to fix later
+
 **v1.13.15 (28 Oct 2021):**
 - Added /countbooks
