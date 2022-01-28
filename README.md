@@ -1,6 +1,9 @@
 
 
-Running Calibre Upload Books
+## Calibre Upload Books
+
+This is a bot to be able to search and send your caliber library books through telegram
+
 =================
 
 ## Environment:
@@ -18,6 +21,8 @@ Running Calibre Upload Books
  **TZ** : America/Santiago
 
  **TG_CONVERTS_BOOKS** [OPTIONAL]: Enable convert epub to mobi (default: True)>
+
+ **TG_TIMEOUT** [OPTIONAL]: TIMEOUT to convert books in seconds (default: 120 )>
  
 
 ## Volumes:
@@ -79,6 +84,7 @@ services:
       - 'TG_API_HASH=<telegram API hash generated at ´Generating Telegram API keys´>' 
       - 'TG_BOT_TOKEN=<telegram BOT token generated at ´Creating a Telegram Bot´>'
       - 'TG_CONVERTS_BOOKS=True'
+      - 'TG_TIMEOUT=120'
       - 'TZ=America/Santiago'
     volumes:
       - /path/to/config:/config
@@ -89,7 +95,7 @@ services:
 ## **Changelog:**
 **v1.14.5 (28/01/2022/):**
 - Update bottorrent.py
-- Added TG_TIMEOUT for convert
+- Added TG_TIMEOUT to convert books
 - Fixed bugs
 - Added more bugs to fix later
 
