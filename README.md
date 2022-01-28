@@ -94,7 +94,7 @@ services:
 ```
 
 ## **Changelog:**
-**v1.14.5 (28/01/2022/):**
+**v1.14.6 (28/01/2022/):**
 - Update bottorrent.py
 - Added TG_TIMEOUT to convert books
 - Fixed bugs
