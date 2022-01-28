@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.14.1"
+VERSION = "VERSION 1.14.5"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -126,21 +126,17 @@ async def CONVERTS_BOOKS(message,file,name):
 		mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
 
 		if not os.path.exists(mobi):
-			logger.info("CONVERT TO MOBI 1: ")
 			await message.edit('Convirtiendo a mobi...')
-			logger.info("CONVERT TO MOBI 2: ")
 
 			kill = lambda processss: processss.kill()
 
-			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
-			logger.info("CONVERT TO MOBI 3: ")
+			#process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
+			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
 			
 			my_timer = threading.Timer(TG_TIMEOUT, kill, [process])
 
 			try:
 				my_timer.start()
-
-				logger.info("CONVERT TO MOBI 4: ")
 
 				while True:
 					nextline = process.stdout.readline()
@@ -149,10 +145,8 @@ async def CONVERTS_BOOKS(message,file,name):
 					sys.stdout.write(nextline)
 					sys.stdout.flush()
 
-
 				stdout, stderr = process.communicate()
 				exitCode = process.returncode
-				logger.info("CONVERT TO MOBI 5: ")
 
 				if os.path.exists(mobi):
 					logger.info("MOBI: {}".format(mobi))

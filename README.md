@@ -87,7 +87,8 @@ services:
 ```
 
 ## **Changelog:**
-**v1.14.1 (30 Dic 2021):**
+**v1.14.5 (28/01/2022/):**
+- Update bottorrent.py
 - Added TG_TIMEOUT for convert
 - Fixed bugs
 - Added more bugs to fix later
