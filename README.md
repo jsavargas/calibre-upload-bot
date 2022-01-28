@@ -4,6 +4,7 @@
 
 This is a bot to be able to search and send your caliber library books through telegram
 
+![](img/telegram.png)
 =================
 
 ## Environment:
