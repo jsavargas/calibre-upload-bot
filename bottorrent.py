@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.14.5"
+VERSION = "VERSION 1.14.6"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -87,7 +87,7 @@ bot_token = get_env('TG_BOT_TOKEN', 'Enter your Telegram BOT token: ')
 TG_AUTHORIZED_USER_ID = get_env('TG_AUTHORIZED_USER_ID', False)
 TG_BOOKS_PATH = get_env('TG_DOWNLOAD_PATH', '/books')
 TG_CONVERTS_BOOKS = get_env('TG_CONVERTS_BOOKS', 'True')
-TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',120))
+TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',180))
 
 
 usuarios = list(map(int, TG_AUTHORIZED_USER_ID.replace(" ", "").split(','))) if TG_AUTHORIZED_USER_ID else False 
