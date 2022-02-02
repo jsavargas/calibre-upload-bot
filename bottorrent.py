@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.14.6"
+VERSION = "VERSION 1.14.8"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -87,7 +87,7 @@ bot_token = get_env('TG_BOT_TOKEN', 'Enter your Telegram BOT token: ')
 TG_AUTHORIZED_USER_ID = get_env('TG_AUTHORIZED_USER_ID', False)
 TG_BOOKS_PATH = get_env('TG_DOWNLOAD_PATH', '/books')
 TG_CONVERTS_BOOKS = get_env('TG_CONVERTS_BOOKS', 'True')
-TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',180))
+TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',300))
 
 
 usuarios = list(map(int, TG_AUTHORIZED_USER_ID.replace(" ", "").split(','))) if TG_AUTHORIZED_USER_ID else False 
@@ -179,37 +179,41 @@ async def getBooksbyID(con,message,id):
 		await msg.edit('No se encontraron resultados')
 		return 
 
+	try:
+		cursorObj = con.cursor() 
+		#cursorObj.execute('SELECT id,title,author_sort,path FROM books WHERE id = "{}"'.format(id))
 
-	cursorObj = con.cursor() 
-	#cursorObj.execute('SELECT id,title,author_sort,path FROM books WHERE id = "{}"'.format(id))
+		cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
+								from books
+								INNER JOIN data	
+								ON books.id = data.book
+								LEFT JOIN comments
+								ON books.id = comments.book
+								where books.id = {} -- and books.id = comments.book
+								order by books.author_sort,books.title limit 1'''.format(id))
 
-	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
-							from books
-							INNER JOIN data	
-							ON books.id = data.book
-							INNER JOIN comments
-							ON books.id = comments.book
-							where books.id = {} and books.id = comments.book
-							order by books.author_sort,books.title limit 1'''.format(id))
+		for row in cursorObj.fetchall():
+			id,author_sort,title,path,name,format,has_cover,text = row
+			#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
+			file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+			if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
+			if os.path.exists(file):
+				await msg.edit('Enviando archivo...')
+				loop = asyncio.get_event_loop()
+				if os.path.exists(cover):
+					if text == None: text = ""
+					resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+					await client.send_file(CID, cover, caption=resena)
+					await tg_send_file(CID,file,name)
+					mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
 
-	for row in cursorObj.fetchall():
-		id,author_sort,title,path,name,format,has_cover,text = row
-		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
-		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
-		if os.path.exists(file):
-			await msg.edit('Enviando archivo...')
-			loop = asyncio.get_event_loop()
-			if os.path.exists(cover):
-				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
-				await client.send_file(CID, cover, caption=resena)
-				await tg_send_file(CID,file,name)
-				mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
+				if eval(TG_CONVERTS_BOOKS) and format.lower() != 'mobi':
+					await CONVERTS_BOOKS(message,file,name)
+				
+				await msg.edit('Archivos enviados...')
 
-			if eval(TG_CONVERTS_BOOKS) and format.lower() != 'mobi':
-				await CONVERTS_BOOKS(message,file,name)
-			
-			await msg.edit('Archivos enviados...')
+	except:
+		await msg.edit('Error al enviar')
 
 async def getBooksTitle(con,message,title):
 

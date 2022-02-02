@@ -22,7 +22,7 @@ This is a bot to be able to search and send your caliber library books through t
 
  **TG_CONVERTS_BOOKS** [OPTIONAL]: Enable convert epub to mobi (default: True)>
 
- **TG_TIMEOUT** [OPTIONAL]: TIMEOUT to convert books in seconds (default: 180 )>
+ **TG_TIMEOUT** [OPTIONAL]: TIMEOUT to convert books in seconds (default: 300 )>
  
 
 ## Volumes:
@@ -84,7 +84,7 @@ services:
       - 'TG_API_HASH=<telegram API hash generated at ´Generating Telegram API keys´>' 
       - 'TG_BOT_TOKEN=<telegram BOT token generated at ´Creating a Telegram Bot´>'
       - 'TG_CONVERTS_BOOKS=True'
-      - 'TG_TIMEOUT=180'
+      - 'TG_TIMEOUT=300'
       - 'TZ=America/Santiago'
     volumes:
       - /path/to/config:/config
@@ -93,6 +93,10 @@ services:
 ```
 
 ## **Changelog:**
+
+**v1.14.8 (02/02/2022/):**
+- Update bottorrent.py
+
 **v1.14.5 (28/01/2022/):**
 - Update bottorrent.py
 - Added TG_TIMEOUT to convert books
