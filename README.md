@@ -2,8 +2,9 @@
 
 ## Calibre Upload Books
 
-This is a bot to be able to search and send your caliber library books through telegram
+This is a bot to be able to search and send your calibre library books through telegram
 
+![](img/telegram.png)
 =================
 
 ## Environment:
@@ -96,8 +97,10 @@ services:
 
 **v1.14.8 (02/02/2022/):**
 - Update bottorrent.py
+- Fixed bugs
+- Added more bugs to fix later
 
-**v1.14.5 (28/01/2022/):**
+**v1.14.6 (28/01/2022/):**
 - Update bottorrent.py
 - Added TG_TIMEOUT to convert books
 - Fixed bugs
