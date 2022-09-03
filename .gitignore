@@ -4,6 +4,7 @@
 Dockerfile.python
 
 docker-compose.yaml
+docker-compose.develop.yml
 
 *~
 
