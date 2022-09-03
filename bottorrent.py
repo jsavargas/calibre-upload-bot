@@ -111,7 +111,7 @@ async def tg_send_message(msg):
     return True
 
 async def tg_send_file(CID,file,name='',update=None):
-    logger.info(f'SEND FILES: {CID} {file} {name}')
+    logger.info(f'SEND FILES: [{CID}] [{file}] [{name}]')
     #await client.send_file(6537360, file)
     async with client.action(CID, 'document') as action:
         await client.send_file(CID, file, caption=name, reply_to=update.message.id, force_document=True, progress_callback=action.progress)
