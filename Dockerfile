@@ -1,4 +1,4 @@
-FROM jsavargas/calibre-upload-bot
+FROM jsavargas/calibre-upload-bot:94512113be
 
 
 WORKDIR /app
