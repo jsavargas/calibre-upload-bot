@@ -94,6 +94,9 @@ services:
 ```
 
 ## **Changelog:**
+**v1.14.7 (03/03/2023/):**
+- fix accents in /title (bodoquenet)
+
 **v1.14.6 (28/01/2022/):**
 - Update bottorrent.py
 - Added TG_TIMEOUT to convert books

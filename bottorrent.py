@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-VERSION = "VERSION 1.14.6"
+VERSION = "VERSION 1.14.7"
 HELP = """
 Bienvenid@ 
 Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
@@ -211,20 +211,42 @@ async def getBooksbyID(con,message,id):
 			
 			await msg.edit('Archivos enviados...')
 
-async def getBooksTitle(con,message,title):
-
-
+async def getBooksTitle(con, message, title):
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
 
-	
-	if title != '/title': 
-		cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
-								from books
-								INNER JOIN data	
-								ON books.id = data.book
-								where books.title LIKE '%{}%' 
-								order by books.author_sort,books.title limit 30'''.format(title))
+	title = title.strip().lower()
+
+	if title != '/title' and title != '':
+		### caracteres en español a ser reemplazados antes de hacer la consulta en la db ###
+		replacements = {
+			'á': 'a',
+			'é': 'e',
+			'í': 'i',
+			'ó': 'o',
+			'ú': 'u',
+			'ü': 'u',
+			'ñ': 'n'
+		}
+
+		for char in replacements: title = title.replace(char, replacements[char])
+
+		cursorObj.execute(f'''select
+			books.id,
+			books.author_sort,
+			books.title,
+			books.path,
+			data.name,
+			data.format
+		from
+			data
+		INNER JOIN books ON books.id = data.book
+		where
+			lower(data.name) LIKE '%{title}%'
+		order by
+			books.author_sort,
+			books.title
+		limit 30''')
 	else:
 		cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
 								from books
@@ -252,7 +274,7 @@ async def getBooksTitle(con,message,title):
 	if rows:
 		await msg.edit("Seleccione un libro para descargar:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
-       
+
 async def getAuthors(con,message,title):
 
 	cursorObj = con.cursor()
@@ -262,8 +284,6 @@ async def getAuthors(con,message,title):
 
 	if title != '/autor': 
 		cursorObj.execute('''select authors.id, authors.name, authors.sort ,count(authors.id) as count from authors
-							INNER JOIN books_authors_link
-							ON books_authors_link.author = authors.id
 							where authors.sort LIKE '%{}%' 
 							group by authors.id
 							limit 30
