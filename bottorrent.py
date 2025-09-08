@@ -572,7 +572,7 @@ async def getBooksAll(con,message,title):
 		await msg.edit("Seleccione un libro para descargar:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
-async def getAllBooksbyAutor(con,message,BooksbyAutor):
+async def getAllBooksbyAutor(con,message,BooksbyAutor,username,user_id):
 
 	logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
 	real_id = get_peer_id(message.peer_id)
@@ -626,7 +626,15 @@ async def getAllBooksbyAutor(con,message,BooksbyAutor):
 
 	if rows:
 		await msg.edit("Seleccione un libro para descargar: /tdax{}\n{}".format(BooksbyAutor,temp))
+
+		group_id = message.chat_id
+		date = time.strftime("%Y-%m-%d %H:%M:%S")
+		cursor_history = con_history.cursor()
+		cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, author_sort, 'all_books_by_author', date))
+		con_history.commit()
+
 	else: await msg.edit('No se encontraron resultados')
+
 
 async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	logger.info("getAllBooksbySeries[{}]".format(getAllBooksbySeries))
@@ -793,10 +801,10 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
-						rest = await getAllBooksbyAutor(con,message,m.group(1))
+						rest = await getAllBooksbyAutor(con,message,m.group(1),username,CID)
 						#await update.reply('Todos los archivos enviados')
 					else:
-						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''))
+						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''),username,CID)
 						#await update.reply('Todos los archivos enviados')
 
 				elif ((update.message.message).startswith('/tdse')):
