@@ -183,7 +183,7 @@ async def getBooksbyID(con,message,id,username,user_id):
 			loop = asyncio.get_event_loop()
 			if os.path.exists(cover):
 				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
-				await client.send_file(CID, cover, caption=resena)
+				await client.send_file(CID, cover,caption=resena)
 				await tg_send_file(CID,file,name)
 
 			
@@ -196,73 +196,73 @@ async def getBooksbyID(con,message,id,username,user_id):
 			con_history.commit()
 
 async def getBooksTitle(con, message, title, username, user_id):
-	cursorObj = con.cursor()
-	msg = await message.edit('Buscando...')
+    cursorObj = con.cursor()
+    msg = await message.edit('Buscando...')
 
-	search_title = title.strip().lower()
+    search_title = title.strip().lower()
 
-	if title != '/title' and title != '':
-		### caracteres en español a ser reemplazados antes de hacer la consulta en la db ###
-		replacements = {
-			'á': 'a',
-			'é': 'e',
-			'í': 'i',
-			'ó': 'o',
-			'ú': 'u',
-			'ü': 'u',
-			'ñ': 'n'
-		}
+    if title != '/title' and title != '':
+        ### caracteres en español a ser reemplazados antes de hacer la consulta en la db ###
+        replacements = {
+            'á': 'a',
+            'é': 'e',
+            'í': 'i',
+            'ó': 'o',
+            'ú': 'u',
+            'ü': 'u',
+            'ñ': 'n'
+        }
 
-		for char in replacements: search_title = search_title.replace(char, replacements[char])
+        for char in replacements: search_title = search_title.replace(char, replacements[char])
 
-		cursorObj.execute(f'''select
-			books.id,
-			books.author_sort,
-			books.title,
-			books.path,
-			data.name,
-			data.format
-		from
-			data
-		INNER JOIN books ON books.id = data.book
-		where
-			lower(data.name) LIKE '%{search_title}%'
-		order by
-			books.author_sort,
-			books.title
-		limit 30''')
-	else:
-		cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
-							from books
-							INNER JOIN data	
-							ON books.id = data.book
-							ORDER BY RANDOM()
-							limit 30''')
+        cursorObj.execute(f'''select
+            books.id,
+            books.author_sort,
+            books.title,
+            books.path,
+            data.name,
+            data.format
+        from
+            data
+        INNER JOIN books ON books.id = data.book
+        where
+            lower(data.name) LIKE '%{search_title}%'
+        order by
+            books.author_sort,
+            books.title
+        limit 30''')
+    else:
+        cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
+                            from books
+                            INNER JOIN data	
+                            ON books.id = data.book
+                            ORDER BY RANDOM()
+                            limit 30''')
 
-	__rows = cursorObj.fetchall()
-	rows = sorted(__rows, key=lambda __rows: __rows[2])
+    __rows = cursorObj.fetchall()
+    rows = sorted(__rows, key=lambda __rows: __rows[2])
 
-	if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
-	
-	temp = ''
-	sending = 0
-	_buttons = []
-	for row in rows:
-		sending +=1
-		id,author_sort,title,path,name,format = row
-		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
-		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending,name,id)
+    if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
+    
+    temp = ''
+    sending = 0
+    _buttons = []
+    for row in rows:
+        sending +=1
+        id,author_sort,title,path,name,format = row
+        #logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
+        file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+        temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending,name,id)
 
-	if rows:
-		await msg.edit("Seleccione un libro para descargar:\n" + temp)
-	else: await msg.edit('No se encontraron resultados')
+    if rows:
+        await msg.edit("Seleccione un libro para descargar:\n" + temp)
+    else: await msg.edit('No se encontraron resultados')
 
-	group_id = message.chat_id
-	date = time.strftime("%Y-%m-%d %H:%M:%S")
-	cursor_history = con_history.cursor()
-	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, search_title, 'title', date))
-	con_history.commit()
+    group_id = message.chat_id
+    date = time.strftime("%Y-%m-%d %H:%M:%S")
+    cursor_history = con_history.cursor()
+    cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, search_title, 'title', date))
+    con_history.commit()
 
 async def getAuthors(con,message,title,username,user_id):
 
@@ -475,7 +475,7 @@ async def getBooksbyAutor(con,message,BooksbyAutor):
   
 	else: await msg.edit('No se encontraron resultados')
 
-async def getBooksbySeries(con,message,getBooksbySeries):
+async def getBooksbySeries(con,message,getBooksbySeries,username,user_id):
 	logger.info("getBooksbySeries[{}]".format(getBooksbySeries))
 
 	if getBooksbySeries == '': 
@@ -485,14 +485,16 @@ async def getBooksbySeries(con,message,getBooksbySeries):
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
 
-	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format,books.series_index
-							from books
-							INNER JOIN data	
-							ON books.id = data.book
-							INNER JOIN books_series_link
-							ON books_series_link.book = books.id
-							where books_series_link.series = {}
-							order by books.author_sort,books.series_index,books.title
+	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format,books.series_index,series.sort
+						from books
+						INNER JOIN data	
+						ON books.id = data.book
+						INNER JOIN series	
+						ON series.id = books_series_link.series
+						INNER JOIN books_series_link
+						ON books_series_link.book = books.id
+						where books_series_link.series = {}
+						order by books.author_sort,books.series_index,books.title
 					'''.format(getBooksbySeries))
 
 	rows = cursorObj.fetchall()
@@ -502,10 +504,10 @@ async def getBooksbySeries(con,message,getBooksbySeries):
 	__temp = ''
 	
 	sending = 0
-
+	sort = ''
 	for row in rows:
 		sending +=1
-		id,author_sort,title,path,name,format,series_index = row
+		id,author_sort,title,path,name,format,series_index,sort = row
 		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
 		
@@ -520,6 +522,12 @@ async def getBooksbySeries(con,message,getBooksbySeries):
 			await message.reply(text, formatting_entities=entities)
 
 	else: await msg.edit('No se encontraron resultados')
+
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, sort, 'books_by_series', date))
+	con_history.commit()
 
 async def getBooksAll(con,message,title):
 
@@ -665,7 +673,6 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 		await msg.edit("Seleccione un Libro para descargar: /tdse{}\n{}".format(getAllBooksbySeries,temp))
 	else: await msg.edit('No se encontraron resultados')
 
-
 def countBooks():
 	logger.info("countBooks[countBooks]")
 
@@ -764,9 +771,9 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/se(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbySeries(con,message,m.group(1))
+						rest = await getBooksbySeries(con,message,m.group(1),username,CID)
 					else:
-						rest = await getBooksbySeries(con,message,msg.replace('/se',''))
+						rest = await getBooksbySeries(con,message,msg.replace('/se',''),username,CID)
 
 
 				elif ((update.message.message).startswith('/all')):
@@ -943,13 +950,12 @@ try:
 
 	client.run_until_disconnected()
 finally:
-	# Cerrando trabajos.
-	
-	#f.close()
-	for task in tasks:
-		task.cancel()
-	# Cola cerrada
-	# Stop Telethon
-	client.disconnect()
-	logger.info("********** STOPPED **********")
-	
+    # Cerrando trabajos.
+    
+    #f.close()
+    for task in tasks:
+        task.cancel()
+    # Cola cerrada
+    # Stop Telethon
+    client.disconnect()
+    logger.info("********** STOPPED **********")
