@@ -7,19 +7,23 @@ This is a bot to be able to search and send your calibre library books through t
 ![](img/telegram.png)
 =================
 
-## Configuration:
+## Environment:
 
-Create a `.env` file in the root of the project and add the following variables:
+ Pull or build the docker image and launch it with the following environment variables:
 
-```
-TG_AUTHORIZED_USER_ID=
-TG_AUTHORIZED_CONVERT_USER_ID=
-TG_API_ID=
-TG_API_HASH=
-TG_BOT_TOKEN=
-TG_TIMEOUT=180
-TZ=America/Santiago
-```
+ **TG_AUTHORIZED_USER_ID** : <Your telegram ´chat_id´ authorized> 
+ 
+ **TG_API_ID** : <telegram API key generated at ´Generating Telegram API keys´>
+
+ **TG_API_HASH** : <telegram API hash generated at ´Generating Telegram API keys´>
+
+ **TG_BOT_TOKEN** : <telegram BOT token generated at ´Creating a Telegram Bot´>
+ 
+ **TZ** : America/Santiago
+
+ **TG_CONVERTS_BOOKS** [OPTIONAL]: Enable convert epub to mobi (default: True)>
+
+ **TG_TIMEOUT** [OPTIONAL]: TIMEOUT to convert books in seconds (default: 180 )>
  
 
 ## Volumes:

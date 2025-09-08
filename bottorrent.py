@@ -105,6 +105,35 @@ temp_completed_path = ''
 
 
 con = sqlite3.connect(os.path.join(TG_BOOKS_PATH,'metadata.db'))
+con_history = sqlite3.connect(os.path.join('/config','history.db'))
+
+def init_history_db():
+    cursor = con_history.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            group_id INTEGER,
+            author TEXT,
+            book TEXT,
+            date TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS searches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            group_id INTEGER,
+            search_query TEXT,
+            search_type TEXT,
+            date TEXT
+        )
+    """)
+    con_history.commit()
+
+init_history_db()
 
 client = TelegramClient(session, api_id, api_hash, proxy = None, request_retries = 10, flood_sleep_threshold = 120)
 
@@ -120,7 +149,7 @@ async def tg_send_file(CID,file,name=''):
 	#await client.send_message(6537360, file)
 
 
-async def getBooksbyID(con,message,id):
+async def getBooksbyID(con,message,id,username,user_id):
 	msg = await message.edit('Buscando...')
 	real_id = get_peer_id(message.peer_id)
 	CID , peer_type = resolve_id(real_id)
@@ -160,11 +189,17 @@ async def getBooksbyID(con,message,id):
 			
 			await msg.edit('Archivos enviados...')
 
-async def getBooksTitle(con, message, title):
+			group_id = message.chat_id
+			date = time.strftime("%Y-%m-%d %H:%M:%S")
+			cursor_history = con_history.cursor()
+			cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, author_sort, title, date))
+			con_history.commit()
+
+async def getBooksTitle(con, message, title, username, user_id):
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
 
-	title = title.strip().lower()
+	search_title = title.strip().lower()
 
 	if title != '/title' and title != '':
 		### caracteres en español a ser reemplazados antes de hacer la consulta en la db ###
@@ -178,7 +213,7 @@ async def getBooksTitle(con, message, title):
 			'ñ': 'n'
 		}
 
-		for char in replacements: title = title.replace(char, replacements[char])
+		for char in replacements: search_title = search_title.replace(char, replacements[char])
 
 		cursorObj.execute(f'''select
 			books.id,
@@ -191,18 +226,18 @@ async def getBooksTitle(con, message, title):
 			data
 		INNER JOIN books ON books.id = data.book
 		where
-			lower(data.name) LIKE '%{title}%'
+			lower(data.name) LIKE '%{search_title}%'
 		order by
 			books.author_sort,
 			books.title
 		limit 30''')
 	else:
 		cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
-								from books
-								INNER JOIN data	
-								ON books.id = data.book
-								ORDER BY RANDOM()
-								limit 30''')
+							from books
+							INNER JOIN data	
+							ON books.id = data.book
+							ORDER BY RANDOM()
+							limit 30''')
 
 	__rows = cursorObj.fetchall()
 	rows = sorted(__rows, key=lambda __rows: __rows[2])
@@ -210,7 +245,6 @@ async def getBooksTitle(con, message, title):
 	if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
 	
 	temp = ''
-	
 	sending = 0
 	_buttons = []
 	for row in rows:
@@ -224,7 +258,13 @@ async def getBooksTitle(con, message, title):
 		await msg.edit("Seleccione un libro para descargar:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
-async def getAuthors(con,message,title):
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, search_title, 'title', date))
+	con_history.commit()
+
+async def getAuthors(con,message,title,username,user_id):
 
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
@@ -233,7 +273,7 @@ async def getAuthors(con,message,title):
 
 	if title != '/autor': 
 		cursorObj.execute('''select authors.id, authors.name, authors.sort ,count(authors.id) as count from authors
-							where authors.sort LIKE '%{}%' 
+							where authors.sort LIKE '%{}%'
 							group by authors.id
 							limit 30
 							'''.format(title))
@@ -270,6 +310,13 @@ async def getAuthors(con,message,title):
 	if rows:
 		await msg.edit("Seleccione un Autor:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
+
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, title, 'author', date))
+	con_history.commit()
+
 
 async def getSeries(con,message,title):
 
@@ -647,7 +694,7 @@ async def worker(name):
 			CID , peer_type = resolve_id(real_id)
 
 			sender = await update.get_sender()
-			username = sender.username
+			username = sender.username if sender.username else ''
 
 			logger.info("worker ==> [{id}][{username}][{message}]".format(message=msg,id=CID,username=username))
 
@@ -663,12 +710,12 @@ async def worker(name):
 				if ((update.message.message).startswith('/title')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /title")
-					rest = await getBooksTitle(con,message,msg.replace('/title ',''))
+					rest = await getBooksTitle(con,message,msg.replace('/title ',''),username,CID)
 				
 				elif ((update.message.message).startswith('/autor')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /autor:[%s]",msg)
-					rest = await getAuthors(con,message,msg.replace('/autor ',''))
+					rest = await getAuthors(con,message,msg.replace('/autor ',''),username,CID)
 					
 				elif ((update.message.message).startswith('/serieautor')):
 					message = await update.reply('Search in queue...')
@@ -687,11 +734,10 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbyID(con,message,m.group(1))
+						rest = await getBooksbyID(con,message,m.group(1),username,CID)
 						#await update.reply('Todos los archivos enviados')
 					else:
-						rest = await getBooksbyID(con,message,msg.replace('/bm',''))
-						#await update.reply('Todos los archivos enviados')
+						rest = await getBooksbyID(con,message,msg.replace('/bm',''),username,CID)
 		
 				elif ((update.message.message).startswith('/ax')):
 					message = await update.reply('Search in queue...')

@@ -5,3 +5,4 @@ docker-compose.yaml
 *~
 docker-compose.dev.yml
 .env
+history.db
