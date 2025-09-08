@@ -426,54 +426,61 @@ async def getSeriesbyAutor(con,message,title,username,user_id):
 
 
 
-async def getBooksbyAutor(con,message,BooksbyAutor):
+async def getBooksbyAutor(con,message,BooksbyAutor,username,user_id):
 
-	logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
-	cursorObj = con.cursor()
-	msg = await message.edit('Buscando...')
+    logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
+    cursorObj = con.cursor()
+    msg = await message.edit('Buscando...')
 
-	if BooksbyAutor == '': 
-		await message.edit('No se encontraron resultados')
-		return 
+    if BooksbyAutor == '': 
+        await message.edit('No se encontraron resultados')
+        return 
 
-	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
-							from books
-							INNER JOIN data	
-							ON books.id = data.book
-							INNER JOIN books_authors_link
-							ON books_authors_link.book = books.id
-							where books_authors_link.author = {}
-							order by books.author_sort,books.title 
-							-- limit 150						
-					'''.format(BooksbyAutor))
+    cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
+                        from books
+                        INNER JOIN data	
+                        ON books.id = data.book
+                        INNER JOIN books_authors_link
+                        ON books_authors_link.book = books.id
+                        where books_authors_link.author = {}
+                        order by books.author_sort,books.title 
+                        -- limit 150
+                    '''.format(BooksbyAutor))
 
-	rows = cursorObj.fetchall()
+    rows = cursorObj.fetchall()
 
-	if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
-	
-	__temp = ''
-	
-	sending = 0
-	for row in rows:
-		sending +=1
-		id,author_sort,title,path,name,format = row
-		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
-		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		__temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending, name,id)
+    if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
+    
+    __temp = ''
+    
+    sending = 0
+    for row in rows:
+        sending +=1
+        id,author_sort,title,path,name,format = row
+        #logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
+        file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+        __temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending, name,id)
 
-	if rows:
-		#await msg.edit("Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,temp))
+    if rows:
+        #await msg.edit("Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,temp))
 
-		tmp = "Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,__temp)
-		text, entities = markdown.parse(tmp)
+        tmp = "Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,__temp)
+        text, entities = markdown.parse(tmp)
 
-		for text, entities in split_text(text, entities):
-			await message.reply(text, formatting_entities=entities)
+        for text, entities in split_text(text, entities):
+            await message.reply(text, formatting_entities=entities)
 
-  
-  
-  
-	else: await msg.edit('No se encontraron resultados')
+        group_id = message.chat_id
+
+        date = time.strftime("%Y-%m-%d %H:%M:%S")
+        cursor_history = con_history.cursor()
+        cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, author_sort, 'books_by_author', date))
+        con_history.commit()
+
+
+
+    else: await msg.edit('No se encontraron resultados')
+
 
 async def getBooksbySeries(con,message,getBooksbySeries,username,user_id):
 	logger.info("getBooksbySeries[{}]".format(getBooksbySeries))
@@ -763,9 +770,9 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/ax(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbyAutor(con,message,m.group(1))
+						rest = await getBooksbyAutor(con,message,m.group(1),username,CID)
 					else:
-						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''))
+						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''),username,CID)
 
 				elif ((update.message.message).startswith('/se')):
 					message = await update.reply('Search in queue...')
