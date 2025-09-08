@@ -318,7 +318,7 @@ async def getAuthors(con,message,title,username,user_id):
 	con_history.commit()
 
 
-async def getSeries(con,message,title):
+async def getSeries(con,message,title,username,user_id):
 
 	logger.info("getSeries[{}]".format(title))
 	cursorObj = con.cursor()
@@ -326,7 +326,7 @@ async def getSeries(con,message,title):
 
 	if title != '/serie' and title != '/series': 
 		cursorObj.execute('''select series.id, series.name, series.sort 
-                    			from series
+                    				from series
 								where series.sort LIKE '%{}%' 
 								limit 30 '''.format(title))
 	else:
@@ -352,7 +352,14 @@ async def getSeries(con,message,title):
 		await msg.edit("Seleccione una Serie:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
-async def getSeriesbyAutor(con,message,title):
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, title, 'series', date))
+	con_history.commit()
+
+
+async def getSeriesbyAutor(con,message,title,username,user_id):
 
 	logger.info("getSeriesbyAutor[{}]".format(title))
 	cursorObj = con.cursor()
@@ -360,37 +367,37 @@ async def getSeriesbyAutor(con,message,title):
 
 	if title != '/serieautor': 
 		cursorObj.execute('''select 
-                    			books.id, 
-                       			books.author_sort,
-                          		series.name,
-								books_series_link.series,
-        						books_authors_link.author,
-              					count(books.series_index) as count
-							from books
-								INNER JOIN books_authors_link
-								ON books_authors_link.book = books.id
-								INNER JOIN books_series_link
-								ON books_series_link.book = books.id
-								INNER JOIN series
-								ON series.id = books_series_link.series
-								where books.author_sort like "%{}%"
-								GROUP BY books_series_link.series
-								order by books.author_sort,books_series_link.series
-								limit 30
-						'''.format(title))
+                    						books.id, 
+                       						books.author_sort,
+                          						series.name,
+										books_series_link.series,
+        										books_authors_link.author,
+              										count(books.series_index) as count
+											from books
+												INNER JOIN books_authors_link
+												ON books_authors_link.book = books.id
+												INNER JOIN books_series_link
+												ON books_series_link.book = books.id
+												INNER JOIN series
+												ON series.id = books_series_link.series
+												where books.author_sort like "%{}%"
+												GROUP BY books_series_link.series
+												order by books.author_sort,books_series_link.series
+												limit 30
+										'''.format(title))
 	else:
 		cursorObj.execute('''select books.id, books.author_sort,series.name,
-							books_series_link.series,books_authors_link.author,count(books.series_index) as count
-							from books
-							INNER JOIN books_authors_link
-							ON books_authors_link.book = books.id
-							INNER JOIN books_series_link
-							ON books_series_link.book = books.id
-							INNER JOIN series
-							ON series.id = books_series_link.series
-							--where books.author_sort like "%king%"
-							GROUP BY books_series_link.series
-							order by RANDOM() limit 50'''.format(title))
+												books_series_link.series,books_authors_link.author,count(books.series_index) as count
+												from books
+											INNER JOIN books_authors_link
+											ON books_authors_link.book = books.id
+											INNER JOIN books_series_link
+											ON books_series_link.book = books.id
+											INNER JOIN series
+											ON series.id = books_series_link.series
+											--where books.author_sort like "%king%"
+											GROUP BY books_series_link.series
+											order by RANDOM() limit 50'''.format(title))
 
 
 	__rows = cursorObj.fetchall()
@@ -410,6 +417,12 @@ async def getSeriesbyAutor(con,message,title):
 	if rows:
 		await msg.edit("Seleccione una Serie:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
+
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, title, 'series_by_author', date))
+	con_history.commit()
 
 
 
@@ -720,12 +733,12 @@ async def worker(name):
 				elif ((update.message.message).startswith('/serieautor')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND serieautor :[%s]",msg)
-					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''))
+					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''),username,CID)
 
 				elif ((update.message.message).startswith('/serie')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND SERIES :[%s]",msg)
-					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''))
+					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''),username,CID)
 
 
 				
