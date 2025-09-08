@@ -536,13 +536,13 @@ async def getBooksbySeries(con,message,getBooksbySeries,username,user_id):
 	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, sort, 'books_by_series', date))
 	con_history.commit()
 
-async def getBooksAll(con,message,title):
+async def getBooksAll(con,message,search_title,username,user_id):
 
-	logger.info("getBooksAll[{}]".format(title))
+	logger.info("getBooksAll[{}]".format(search_title))
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
 
-	if title == '': 
+	if search_title == '': 
 		await msg.edit('No se encontraron resultados')
 		return 
 
@@ -551,7 +551,7 @@ async def getBooksAll(con,message,title):
 							INNER JOIN data	
 							ON books.id = data.book
 							where data.name LIKE '%{}%' 
-							order by books.author_sort,books.title limit 30'''.format(title))
+							order by books.author_sort,books.title limit 30'''.format(search_title))
 
 
 	rows = cursorObj.fetchall()
@@ -571,6 +571,12 @@ async def getBooksAll(con,message,title):
 	if rows:
 		await msg.edit("Seleccione un libro para descargar:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
+
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, search_title, 'all_books', date))
+	con_history.commit()
 
 async def getAllBooksbyAutor(con,message,BooksbyAutor,username,user_id):
 
@@ -802,7 +808,7 @@ async def worker(name):
 				elif ((update.message.message).startswith('/all')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS :[%s]",msg)
-					rest = await getBooksAll(con,message,msg.replace('/all ',''))
+					rest = await getBooksAll(con,message,msg.replace('/all ',''),username,CID)
 					logger.info("FINISH SEND BOOKS :[%s]",msg)
 
 				elif ((update.message.message).startswith('/tdax')):
@@ -810,31 +816,22 @@ async def worker(name):
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbyAutor(con,message,m.group(1),username,CID)
-						#await update.reply('Todos los archivos enviados')
 					else:
 						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''),username,CID)
-						#await update.reply('Todos los archivos enviados')
 
 				elif ((update.message.message).startswith('/tdse')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
 						rest = await getAllBooksbySeries(con,message,m.group(1),username,CID)
-						#await update.reply('Todos los archivos enviados')
 					else:
 						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''),username,CID)
-						#await update.reply('Todos los archivos enviados')
 
-				#else:
-					#await message.edit('Busqueda incorrecta, use /help para más ayuda')
 
 				command_tasks.remove(update.message.message)
-				#logger.info(command_tasks)
 			else:
 				logger.info('EXIST ELEMENTE: %s ', update.message.message)
 				message = await update.reply('Ya existe una busqueda con estos parametros...')
-
-			#logger.info(f"OUT worker ['worker']")
 
 		except Exception as e:
 			command_tasks.remove(update.message.message)
