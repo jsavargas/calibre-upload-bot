@@ -370,7 +370,7 @@ async def getSeriesbyAutor(con,message,title,username,user_id):
                     						books.id, 
                        						books.author_sort,
                           						series.name,
-										books_series_link.series,
+										        books_series_link.series,
         										books_authors_link.author,
               										count(books.series_index) as count
 											from books
@@ -636,7 +636,7 @@ async def getAllBooksbyAutor(con,message,BooksbyAutor,username,user_id):
 	else: await msg.edit('No se encontraron resultados')
 
 
-async def getAllBooksbySeries(con,message,getAllBooksbySeries):
+async def getAllBooksbySeries(con,message,getAllBooksbySeries,username,user_id):
 	logger.info("getAllBooksbySeries[{}]".format(getAllBooksbySeries))
 	real_id = get_peer_id(message.peer_id)
 	CID , peer_type = resolve_id(real_id)
@@ -649,10 +649,12 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	msg = await message.edit('Buscando...')
 
 	cursorObj.execute('''select books.id, books.author_sort, books.title, 
-							books.path,data.name,data.format,books.series_index,books.has_cover
+							books.path,data.name,data.format,books.series_index,books.has_cover,series.sort
 						from books
 						INNER JOIN data	
 						ON books.id = data.book
+                        INNER JOIN series
+                        ON series.id = books_series_link.series
 						INNER JOIN books_series_link
 						ON books_series_link.book = books.id
 						where books_series_link.series = {}
@@ -669,7 +671,7 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	_buttons = []
 	for row in rows:
 		sending +=1
-		id,author_sort,title,path,name,format,series_index,has_cover = row
+		id,author_sort,title,path,name,format,series_index,has_cover,sort = row
 		
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
 		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
@@ -687,6 +689,12 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	if rows:
 		await msg.edit("Seleccione un Libro para descargar: /tdse{}\n{}".format(getAllBooksbySeries,temp))
 	else: await msg.edit('No se encontraron resultados')
+
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, sort, 'all_books_by_series', date))
+	con_history.commit()
 
 def countBooks():
 	logger.info("countBooks[countBooks]")
@@ -811,10 +819,10 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
-						rest = await getAllBooksbySeries(con,message,m.group(1))
+						rest = await getAllBooksbySeries(con,message,m.group(1),username,CID)
 						#await update.reply('Todos los archivos enviados')
 					else:
-						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
+						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''),username,CID)
 						#await update.reply('Todos los archivos enviados')
 
 				#else:
