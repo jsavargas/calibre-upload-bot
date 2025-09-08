@@ -4,7 +4,7 @@
 VERSION = "VERSION 1.14.7"
 HELP = """
 Bienvenid@ 
-Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
+Este bot cuenta con una biblioteca de más de 88 mil libros en epub para poder enviarlos a nuestros kindles 
 
 ¿Como se usa este bot? Muy simple, puedes pedirle que busque por autor /autor y nombre del autor, apellido o nombre, ejemplo:
 /autor Stephen King 
@@ -29,6 +29,8 @@ Y también puedes buscar series por autor y te buscará todas las series de ese 
 /serieautor Anne Rice
 /serieautor Tolkien
 
+Adicionalmente, si eres el usuario autorizado para convertir libros, puedes enviar un archivo .epub al bot y este lo convertirá a .mobi y te lo enviará de vuelta.
+
 """
 UPDATE = """BASADO EN EL BOT DE @DekkaR - 2021:
 - UPLOAD BOOKS IN CALIBRE LIBRARY DB ('metadata.db') /books => ../Calibre Library:/books
@@ -40,13 +42,15 @@ import shutil
 import sys
 import time
 import asyncio
-import cryptg
 import sqlite3
 import json
 import logging
 import subprocess 
 import random
 import threading
+
+from dotenv import load_dotenv
+load_dotenv()
 
 # Imports Telethon
 from telethon import TelegramClient, events
@@ -85,12 +89,11 @@ api_id = get_env('TG_API_ID', 'Enter your API ID: ', int)
 api_hash = get_env('TG_API_HASH', 'Enter your API hash: ')
 bot_token = get_env('TG_BOT_TOKEN', 'Enter your Telegram BOT token: ')
 TG_AUTHORIZED_USER_ID = get_env('TG_AUTHORIZED_USER_ID', False)
+TG_AUTHORIZED_CONVERT_USER_ID = get_env('TG_AUTHORIZED_CONVERT_USER_ID', False)
 TG_BOOKS_PATH = get_env('TG_DOWNLOAD_PATH', '/books')
-TG_CONVERTS_BOOKS = get_env('TG_CONVERTS_BOOKS', 'True')
 TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',180))
-
-
 usuarios = list(map(int, TG_AUTHORIZED_USER_ID.replace(" ", "").split(','))) if TG_AUTHORIZED_USER_ID else False 
+convert_user = int(TG_AUTHORIZED_CONVERT_USER_ID) if TG_AUTHORIZED_CONVERT_USER_ID else False 
 
 
 queue = asyncio.Queue()
@@ -115,57 +118,6 @@ async def tg_send_file(CID,file,name=''):
     async with client.action(CID, 'document') as action:
     	await client.send_file(CID, file,caption=name,force_document=True,progress_callback=action.progress)
 	#await client.send_message(6537360, file)
-
-async def CONVERTS_BOOKS(message,file,name):
-	try:
-
-		logger.info("init CONVERTS_BOOKS  {}".format(file))
-		real_id = get_peer_id(message.peer_id)
-		CID , peer_type = resolve_id(real_id)
-		
-		mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
-
-		if not os.path.exists(mobi):
-			await message.edit('Convirtiendo a mobi...')
-
-			kill = lambda processss: processss.kill()
-
-			#process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
-			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
-			
-			my_timer = threading.Timer(TG_TIMEOUT, kill, [process])
-
-			try:
-				my_timer.start()
-
-				while True:
-					nextline = process.stdout.readline()
-					if nextline == '' and process.poll() is not None:
-						break
-					sys.stdout.write(nextline)
-					sys.stdout.flush()
-
-				stdout, stderr = process.communicate()
-				exitCode = process.returncode
-
-				if os.path.exists(mobi):
-					logger.info("MOBI: {}".format(mobi))
-					await message.edit("Enviando archivo mobi...")
-					await tg_send_file(CID,mobi,name)
-			finally:
-				logger.info('CONVERTS_BOOKS TIMEOUT: Books Upload: ')
-				my_timer.cancel()
-
-
-		else:
-			await message.edit("Enviando archivo mobi...")
-			await tg_send_file(CID,mobi,name)
-
-
-	except Exception as e:
-		logger.info('CONVERTS_BOOKS ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
-
-	logger.info("finish CONVERTS_BOOKS {}".format(file))
 
 
 async def getBooksbyID(con,message,id):
@@ -204,10 +156,7 @@ async def getBooksbyID(con,message,id):
 				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
 				await client.send_file(CID, cover, caption=resena)
 				await tg_send_file(CID,file,name)
-				mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
 
-			if eval(TG_CONVERTS_BOOKS) and format.lower() != 'mobi':
-				await CONVERTS_BOOKS(message,file,name)
 			
 			await msg.edit('Archivos enviados...')
 
@@ -811,6 +760,74 @@ async def worker(name):
 		queue.task_done()
 
 
+async def CONVERTS_BOOKS(message,file,name):
+	try:
+
+		logger.info("init CONVERTS_BOOKS  {}".format(file))
+		real_id = get_peer_id(message.peer_id)
+		CID , peer_type = resolve_id(real_id)
+		
+		mobi = os.path.join('/mobi', '{}.{}'.format(name,'mobi'))
+
+		if not os.path.exists(mobi):
+			await message.edit('Convirtiendo a mobi...')
+
+			kill = lambda processss: processss.kill()
+
+			#process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
+			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
+			
+			my_timer = threading.Timer(TG_TIMEOUT, kill, [process])
+
+			try:
+				my_timer.start()
+
+				while True:
+					nextline = process.stdout.readline()
+					if nextline == '' and process.poll() is not None:
+						break
+					sys.stdout.write(nextline)
+					sys.stdout.flush()
+
+				stdout, stderr = process.communicate()
+				exitCode = process.returncode
+
+				if os.path.exists(mobi):
+					logger.info("MOBI: {}".format(mobi))
+					await message.edit("Enviando archivo mobi...")
+					await tg_send_file(CID,mobi,name)
+			finally:
+				logger.info('CONVERTS_BOOKS TIMEOUT: Books Upload: ')
+				my_timer.cancel()
+
+
+		else:
+			await message.edit("Enviando archivo mobi...")
+			await tg_send_file(CID,mobi,name)
+
+
+	except Exception as e:
+		logger.info('CONVERTS_BOOKS ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
+
+	logger.info("finish CONVERTS_BOOKS {}".format(file))
+
+@events.register(events.NewMessage(func=lambda e: e.document))
+async def handler_convert(update):
+	try:
+		real_id = get_peer_id(update.message.peer_id)
+		CID , peer_type = resolve_id(real_id)
+
+		if TG_AUTHORIZED_CONVERT_USER_ID and CID == int(TG_AUTHORIZED_CONVERT_USER_ID):
+			if update.message.document.mime_type == 'application/epub+zip':
+				message = await update.reply('Descargando archivo...')
+				file_name = update.message.document.attributes[0].file_name
+				file_path = os.path.join('/imports', file_name)
+				await client.download_media(update.message, file_path)
+				await CONVERTS_BOOKS(message, file_path, os.path.splitext(file_name)[0])
+	except Exception as e:
+		message = await update.reply('ERROR: ' + str(e))
+		logger.info('EXCEPTION USER: %s ', str(e))
+
 @events.register(events.NewMessage)
 async def handler(update):
 	global temp_completed_path
@@ -821,7 +838,7 @@ async def handler(update):
 		real_id = get_peer_id(update.message.peer_id)
 		CID , peer_type = resolve_id(real_id)
 
-		if not TG_AUTHORIZED_USER_ID or CID in usuarios:
+		if not TG_AUTHORIZED_USER_ID or CID in usuarios or CID == convert_user:
 			if update.message.message == '/help' or update.message.message == '/start':
 				message = await update.reply(HELP) 
 			elif update.message.message == '/version': 
@@ -856,6 +873,7 @@ try:
 	# Arrancamos bot con token
 	client.start(bot_token=str(bot_token))
 	client.add_event_handler(handler)
+	client.add_event_handler(handler_convert)
 
 	# Pulsa Ctrl+C para detener
 	loop.run_until_complete(tg_send_message(f"Calibre Upload Started: \n - {VERSION}\n - Se encontraron {countBooks()} libros"))

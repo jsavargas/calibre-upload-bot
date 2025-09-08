@@ -7,30 +7,28 @@ This is a bot to be able to search and send your calibre library books through t
 ![](img/telegram.png)
 =================
 
-## Environment:
+## Configuration:
 
- Pull or build the docker image and launch it with the following environment variables:
+Create a `.env` file in the root of the project and add the following variables:
 
- **TG_AUTHORIZED_USER_ID** : <Your telegram ´chat_id´ authorized> 
- 
- **TG_API_ID** : <telegram API key generated at ´Generating Telegram API keys´>
-
- **TG_API_HASH** : <telegram API hash generated at ´Generating Telegram API keys´>
-
- **TG_BOT_TOKEN** : <telegram BOT token generated at ´Creating a Telegram Bot´>
- 
- **TZ** : America/Santiago
-
- **TG_CONVERTS_BOOKS** [OPTIONAL]: Enable convert epub to mobi (default: True)>
-
- **TG_TIMEOUT** [OPTIONAL]: TIMEOUT to convert books in seconds (default: 180 )>
+```
+TG_AUTHORIZED_USER_ID=
+TG_AUTHORIZED_CONVERT_USER_ID=
+TG_API_ID=
+TG_API_HASH=
+TG_BOT_TOKEN=
+TG_TIMEOUT=180
+TZ=America/Santiago
+```
  
 
 ## Volumes:
 
  **/books** : folder Calibre Library
- 
- **/output** : folder where the converted files will be saved
+
+ **/mobi** : folder where the converted files will be saved
+
+ **/imports** : folder where the original epub files will be saved
 
 
 
@@ -81,16 +79,16 @@ services:
       - 'PUID=1000'
       - 'PGID=1000'
       - 'TG_AUTHORIZED_USER_ID=63460,63466' #<telegram chat_id authorized>
+      - 'TG_AUTHORIZED_CONVERT_USER_ID=63460' #<telegram chat_id authorized to convert books>
       - 'TG_API_ID=<telegram API key generated at ´Generating Telegram API keys´>'
       - 'TG_API_HASH=<telegram API hash generated at ´Generating Telegram API keys´>' 
       - 'TG_BOT_TOKEN=<telegram BOT token generated at ´Creating a Telegram Bot´>'
-      - 'TG_CONVERTS_BOOKS=True'
       - 'TG_TIMEOUT=180'
       - 'TZ=America/Santiago'
     volumes:
       - /path/to/config:/config
       - /path/calibre/library:/books
-      - /path//calibre/output:/output
+      - /path/calibre/mobi:/mobi
 ```
 
 ## **Changelog:**
