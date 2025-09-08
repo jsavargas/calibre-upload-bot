@@ -57,6 +57,7 @@ from telethon import TelegramClient, events
 from telethon.tl import types
 from telethon.utils import get_extension, get_peer_id, resolve_id, split_text
 from telethon.extensions import markdown
+from telethon.tl.custom import Button
 
 
 '''
@@ -177,23 +178,17 @@ async def getBooksbyID(con,message,id,username,user_id):
 		id,author_sort,title,path,name,format,has_cover,text = row
 		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
 		if os.path.exists(file):
-			await msg.edit('Enviando archivo...')
-			loop = asyncio.get_event_loop()
+			buttons = [
+				[Button.inline("EPUB", data=f"send_epub_{id}"), Button.inline("MOBI", data=f"send_mobi_{id}")]
+			]
+			if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
 			if os.path.exists(cover):
 				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
-				await client.send_file(CID, cover,caption=resena)
-				await tg_send_file(CID,file,name)
-
-			
-			await msg.edit('Archivos enviados...')
-
-			group_id = message.chat_id
-			date = time.strftime("%Y-%m-%d %H:%M:%S")
-			cursor_history = con_history.cursor()
-			cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, author_sort, title, date))
-			con_history.commit()
+				await msg.edit(file=cover) # Edit with file
+				await msg.edit(text=resena, buttons=buttons) # Edit with caption and buttons
+			else:
+				await msg.edit('Seleccione el formato:', buttons=buttons)
 
 async def getBooksTitle(con, message, title, username, user_id):
     cursorObj = con.cursor()
@@ -946,6 +941,89 @@ async def handler(update):
 	except Exception as e:
 		message = await update.reply('ERROR: ' + str(e))
 		logger.info('EXCEPTION USER: %s ', str(e))
+
+@client.on(events.CallbackQuery)
+async def callback_query_handler(event):
+    query_data = event.data.decode('utf-8')
+    if query_data.startswith('send_epub_'):
+        book_id = query_data.replace('send_epub_', '')
+        await event.answer("Enviando EPUB...", alert=False)
+        # Retrieve book details and send EPUB
+        cursorObj = con.cursor()
+        cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
+                                from books
+                                INNER JOIN data
+                                ON books.id = data.book
+                                INNER JOIN comments
+                                ON books.id = comments.book
+                                where books.id = {} and books.id = comments.book
+                                order by books.author_sort,books.title limit 1'''.format(book_id))
+        row = cursorObj.fetchone()
+        if row:
+            id,author_sort,title,path,name,format,has_cover,text = row
+            file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+            if os.path.exists(file):
+                resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+                await event.edit(resena)
+                await tg_send_file(event.chat_id,file,name)
+                await event.reply('Archivos enviados...')
+
+                group_id = event.chat_id
+                date = time.strftime("%Y-%m-%d %H:%M:%S")
+                cursor_history = con_history.cursor()
+                cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date) VALUES (?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date))
+                con_history.commit()
+            else:
+                await event.edit('Archivo EPUB no encontrado.')
+        else:
+            await event.edit('Libro no encontrado.')
+
+    elif query_data.startswith('send_mobi_'):
+        book_id = query_data.replace('send_mobi_', '')
+        # Retrieve book details, convert to MOBI and send
+        cursorObj = con.cursor()
+        cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
+                                from books
+                                INNER JOIN data
+                                ON books.id = data.book
+                                INNER JOIN comments
+                                ON books.id = comments.book
+                                where books.id = {} and books.id = comments.book
+                                order by books.author_sort,books.title limit 1'''.format(book_id))
+        row = cursorObj.fetchone()
+        if row:
+            id,author_sort,title,path,name,format,has_cover,text = row
+            resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+            await event.edit(resena)
+            await event.answer("Convirtiendo a MOBI y enviando...", alert=False)
+            epub_file = os.path.join(TG_BOOKS_PATH,path, '{}.epub'.format(name)) # Assuming original is epub
+            mobi_file = os.path.join('/tmp', '{}.mobi'.format(name)) # Temporary path for mobi
+
+            if os.path.exists(epub_file):
+                # Convert to mobi
+                process = subprocess.Popen(["ebook-convert", epub_file, mobi_file, "--prefer-author-sort", "--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
+                stdout, stderr = process.communicate()
+                exitCode = process.returncode
+
+                if exitCode == 0 and os.path.exists(mobi_file):
+                    if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
+                    if os.path.exists(cover):
+                        resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+                    await tg_send_file(event.chat_id,mobi_file,name)
+                    await event.reply('Archivos enviados...')
+
+                    group_id = event.chat_id
+                    date = time.strftime("%Y-%m-%d %H:%M:%S")
+                    cursor_history = con_history.cursor()
+                    cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date) VALUES (?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date))
+                    con_history.commit()
+                    os.remove(mobi_file) # Clean up temporary mobi file
+                else:
+                    await event.edit('Error al convertir a MOBI.')
+            else:
+                await event.edit('Archivo EPUB no encontrado para convertir.')
+        else:
+            await event.edit('Libro no encontrado.')
 
 try:
 	# Crear cola de procesos concurrentes.
