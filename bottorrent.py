@@ -118,9 +118,15 @@ def init_history_db():
             group_id INTEGER,
             author TEXT,
             book TEXT,
-            date TEXT
+            date TEXT,
+            extension TEXT
         )
     """)
+    try:
+        cursor.execute("ALTER TABLE downloads ADD COLUMN extension TEXT")
+    except sqlite3.OperationalError:
+        # Column already exists, do nothing
+        pass
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS searches (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -974,10 +980,8 @@ async def callback_query_handler(event):
                     group_id = event.chat_id
                     date = time.strftime("%Y-%m-%d %H:%M:%S")
                     cursor_history = con_history.cursor()
-                    cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date) VALUES (?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date))
+                    cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date, extension) VALUES (?, ?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date, 'epub'))
                     con_history.commit()
-                else:
-                    await event.edit('Archivo EPUB no encontrado.')
             else:
                 await event.edit('Libro no encontrado.')
         except Exception as e:
@@ -1022,7 +1026,7 @@ async def callback_query_handler(event):
                         group_id = event.chat_id
                         date = time.strftime("%Y-%m-%d %H:%M:%S")
                         cursor_history = con_history.cursor()
-                        cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date) VALUES (?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date))
+                        cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date, extension) VALUES (?, ?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date, 'mobi'))
                         con_history.commit()
                         os.remove(mobi_file) # Clean up temporary mobi file
                     else:
