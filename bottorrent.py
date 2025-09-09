@@ -742,6 +742,8 @@ async def worker(name):
 
 			logger.info("worker ==> [{id}][{username}][{message}]".format(message=msg,id=CID,username=username))
 
+			user_id =  update.from_id.user_id if update.from_id else CID
+			logger.info("worker ==> user_id [{user_id}]".format(user_id=user_id))
 
 			if update.message.message not in command_tasks:
 				command_tasks.append(update.message.message)
@@ -754,22 +756,22 @@ async def worker(name):
 				if ((update.message.message).startswith('/title')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /title")
-					rest = await getBooksTitle(con,message,msg.replace('/title ',''),username,CID)
+					rest = await getBooksTitle(con,message,msg.replace('/title ',''),username,user_id)
 				
 				elif ((update.message.message).startswith('/autor')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /autor:[%s]",msg)
-					rest = await getAuthors(con,message,msg.replace('/autor ',''),username,CID)
+					rest = await getAuthors(con,message,msg.replace('/autor ',''),username,user_id)
 					
 				elif ((update.message.message).startswith('/serieautor')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND serieautor :[%s]",msg)
-					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''),username,CID)
+					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''),username,user_id)
 
 				elif ((update.message.message).startswith('/serie')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND SERIES :[%s]",msg)
-					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''),username,CID)
+					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''),username,user_id)
 
 
 				
@@ -778,49 +780,49 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbyID(con,message,m.group(1),username,CID)
+						rest = await getBooksbyID(con,message,m.group(1),username,user_id)
 						#await update.reply('Todos los archivos enviados')
 					else:
-						rest = await getBooksbyID(con,message,msg.replace('/bm',''),username,CID)
+						rest = await getBooksbyID(con,message,msg.replace('/bm',''),username,user_id)
 		
 				elif ((update.message.message).startswith('/ax')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/ax(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbyAutor(con,message,m.group(1),username,CID)
+						rest = await getBooksbyAutor(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''),username,CID)
+						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''),username,user_id)
 
 				elif ((update.message.message).startswith('/se')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/se(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbySeries(con,message,m.group(1),username,CID)
+						rest = await getBooksbySeries(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getBooksbySeries(con,message,msg.replace('/se',''),username,CID)
+						rest = await getBooksbySeries(con,message,msg.replace('/se',''),username,user_id)
 
 
 				elif ((update.message.message).startswith('/all')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS :[%s]",msg)
-					rest = await getBooksAll(con,message,msg.replace('/all ',''),username,CID)
+					rest = await getBooksAll(con,message,msg.replace('/all ',''),username,user_id)
 					logger.info("FINISH SEND BOOKS :[%s]",msg)
 
 				elif ((update.message.message).startswith('/tdax')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
-						rest = await getAllBooksbyAutor(con,message,m.group(1),username,CID)
+						rest = await getAllBooksbyAutor(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''),username,CID)
+						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''),username,user_id)
 
 				elif ((update.message.message).startswith('/tdse')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
-						rest = await getAllBooksbySeries(con,message,m.group(1),username,CID)
+						rest = await getAllBooksbySeries(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''),username,CID)
+						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''),username,user_id)
 
 
 				command_tasks.remove(update.message.message)
