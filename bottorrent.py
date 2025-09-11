@@ -4,7 +4,7 @@
 VERSION = "VERSION 1.14.7"
 HELP = """
 Bienvenid@ 
-Este bot cuenta con una biblioteca de más de 88 mil libros en epub los cuales son convertidos a mobi para poder enviarlos a nuestros kindles 
+Este bot cuenta con una biblioteca de más de 88 mil libros en epub para poder enviarlos a nuestros kindles 
 
 ¿Como se usa este bot? Muy simple, puedes pedirle que busque por autor /autor y nombre del autor, apellido o nombre, ejemplo:
 /autor Stephen King 
@@ -29,6 +29,8 @@ Y también puedes buscar series por autor y te buscará todas las series de ese 
 /serieautor Anne Rice
 /serieautor Tolkien
 
+Adicionalmente, si eres el usuario autorizado para convertir libros, puedes enviar un archivo .epub al bot y este lo convertirá a .mobi y te lo enviará de vuelta.
+
 """
 UPDATE = """BASADO EN EL BOT DE @DekkaR - 2021:
 - UPLOAD BOOKS IN CALIBRE LIBRARY DB ('metadata.db') /books => ../Calibre Library:/books
@@ -40,7 +42,6 @@ import shutil
 import sys
 import time
 import asyncio
-import cryptg
 import sqlite3
 import json
 import logging
@@ -48,11 +49,15 @@ import subprocess
 import random
 import threading
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # Imports Telethon
 from telethon import TelegramClient, events
 from telethon.tl import types
 from telethon.utils import get_extension, get_peer_id, resolve_id, split_text
 from telethon.extensions import markdown
+from telethon.tl.custom import Button
 
 
 '''
@@ -85,12 +90,11 @@ api_id = get_env('TG_API_ID', 'Enter your API ID: ', int)
 api_hash = get_env('TG_API_HASH', 'Enter your API hash: ')
 bot_token = get_env('TG_BOT_TOKEN', 'Enter your Telegram BOT token: ')
 TG_AUTHORIZED_USER_ID = get_env('TG_AUTHORIZED_USER_ID', False)
+TG_AUTHORIZED_CONVERT_USER_ID = get_env('TG_AUTHORIZED_CONVERT_USER_ID', False)
 TG_BOOKS_PATH = get_env('TG_DOWNLOAD_PATH', '/books')
-TG_CONVERTS_BOOKS = get_env('TG_CONVERTS_BOOKS', 'True')
 TG_TIMEOUT = int(os.environ.get('TG_TIMEOUT',180))
-
-
 usuarios = list(map(int, TG_AUTHORIZED_USER_ID.replace(" ", "").split(','))) if TG_AUTHORIZED_USER_ID else False 
+convert_user = int(TG_AUTHORIZED_CONVERT_USER_ID) if TG_AUTHORIZED_CONVERT_USER_ID else False 
 
 
 queue = asyncio.Queue()
@@ -102,6 +106,41 @@ temp_completed_path = ''
 
 
 con = sqlite3.connect(os.path.join(TG_BOOKS_PATH,'metadata.db'))
+con_history = sqlite3.connect(os.path.join('/config','history.db'))
+
+def init_history_db():
+    cursor = con_history.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            group_id INTEGER,
+            author TEXT,
+            book TEXT,
+            date TEXT,
+            extension TEXT
+        )
+    """)
+    try:
+        cursor.execute("ALTER TABLE downloads ADD COLUMN extension TEXT")
+    except sqlite3.OperationalError:
+        # Column already exists, do nothing
+        pass
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS searches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            group_id INTEGER,
+            search_query TEXT,
+            search_type TEXT,
+            date TEXT
+        )
+    """)
+    con_history.commit()
+
+init_history_db()
 
 client = TelegramClient(session, api_id, api_hash, proxy = None, request_retries = 10, flood_sleep_threshold = 120)
 
@@ -116,59 +155,8 @@ async def tg_send_file(CID,file,name=''):
     	await client.send_file(CID, file,caption=name,force_document=True,progress_callback=action.progress)
 	#await client.send_message(6537360, file)
 
-async def CONVERTS_BOOKS(message,file,name):
-	try:
 
-		logger.info("init CONVERTS_BOOKS  {}".format(file))
-		real_id = get_peer_id(message.peer_id)
-		CID , peer_type = resolve_id(real_id)
-		
-		mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
-
-		if not os.path.exists(mobi):
-			await message.edit('Convirtiendo a mobi...')
-
-			kill = lambda processss: processss.kill()
-
-			#process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
-			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
-			
-			my_timer = threading.Timer(TG_TIMEOUT, kill, [process])
-
-			try:
-				my_timer.start()
-
-				while True:
-					nextline = process.stdout.readline()
-					if nextline == '' and process.poll() is not None:
-						break
-					sys.stdout.write(nextline)
-					sys.stdout.flush()
-
-				stdout, stderr = process.communicate()
-				exitCode = process.returncode
-
-				if os.path.exists(mobi):
-					logger.info("MOBI: {}".format(mobi))
-					await message.edit("Enviando archivo mobi...")
-					await tg_send_file(CID,mobi,name)
-			finally:
-				logger.info('CONVERTS_BOOKS TIMEOUT: Books Upload: ')
-				my_timer.cancel()
-
-
-		else:
-			await message.edit("Enviando archivo mobi...")
-			await tg_send_file(CID,mobi,name)
-
-
-	except Exception as e:
-		logger.info('CONVERTS_BOOKS ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
-
-	logger.info("finish CONVERTS_BOOKS {}".format(file))
-
-
-async def getBooksbyID(con,message,id):
+async def getBooksbyID(con,message,id,username,user_id):
 	msg = await message.edit('Buscando...')
 	real_id = get_peer_id(message.peer_id)
 	CID , peer_type = resolve_id(real_id)
@@ -196,86 +184,88 @@ async def getBooksbyID(con,message,id):
 		id,author_sort,title,path,name,format,has_cover,text = row
 		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
 		if os.path.exists(file):
-			await msg.edit('Enviando archivo...')
-			loop = asyncio.get_event_loop()
+			buttons = [
+				[Button.inline("EPUB", data=f"send_epub_{id}"), Button.inline("MOBI", data=f"send_mobi_{id}")]
+			]
+			if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
 			if os.path.exists(cover):
 				resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
-				await client.send_file(CID, cover, caption=resena)
-				await tg_send_file(CID,file,name)
-				mobi = os.path.join('/output', '{}.{}'.format(name,'mobi'))
+				await msg.edit(file=cover) # Edit with file
+				await msg.edit(text=resena, buttons=buttons) # Edit with caption and buttons
+			else:
+				await msg.edit('Seleccione el formato:', buttons=buttons)
 
-			if eval(TG_CONVERTS_BOOKS) and format.lower() != 'mobi':
-				await CONVERTS_BOOKS(message,file,name)
-			
-			await msg.edit('Archivos enviados...')
+async def getBooksTitle(con, message, title, username, user_id):
+    cursorObj = con.cursor()
+    msg = await message.edit('Buscando...')
 
-async def getBooksTitle(con, message, title):
-	cursorObj = con.cursor()
-	msg = await message.edit('Buscando...')
+    search_title = title.strip().lower()
 
-	title = title.strip().lower()
+    if title != '/title' and title != '':
+        ### caracteres en español a ser reemplazados antes de hacer la consulta en la db ###
+        replacements = {
+            'á': 'a',
+            'é': 'e',
+            'í': 'i',
+            'ó': 'o',
+            'ú': 'u',
+            'ü': 'u',
+            'ñ': 'n'
+        }
 
-	if title != '/title' and title != '':
-		### caracteres en español a ser reemplazados antes de hacer la consulta en la db ###
-		replacements = {
-			'á': 'a',
-			'é': 'e',
-			'í': 'i',
-			'ó': 'o',
-			'ú': 'u',
-			'ü': 'u',
-			'ñ': 'n'
-		}
+        for char in replacements: search_title = search_title.replace(char, replacements[char])
 
-		for char in replacements: title = title.replace(char, replacements[char])
+        cursorObj.execute(f'''select
+            books.id,
+            books.author_sort,
+            books.title,
+            books.path,
+            data.name,
+            data.format
+        from
+            data
+        INNER JOIN books ON books.id = data.book
+        where
+            lower(data.name) LIKE '%{search_title}%'
+        order by
+            books.author_sort,
+            books.title
+        limit 30''')
+    else:
+        cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
+                            from books
+                            INNER JOIN data	
+                            ON books.id = data.book
+                            ORDER BY RANDOM()
+                            limit 30''')
 
-		cursorObj.execute(f'''select
-			books.id,
-			books.author_sort,
-			books.title,
-			books.path,
-			data.name,
-			data.format
-		from
-			data
-		INNER JOIN books ON books.id = data.book
-		where
-			lower(data.name) LIKE '%{title}%'
-		order by
-			books.author_sort,
-			books.title
-		limit 30''')
-	else:
-		cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
-								from books
-								INNER JOIN data	
-								ON books.id = data.book
-								ORDER BY RANDOM()
-								limit 30''')
+    __rows = cursorObj.fetchall()
+    rows = sorted(__rows, key=lambda __rows: __rows[2])
 
-	__rows = cursorObj.fetchall()
-	rows = sorted(__rows, key=lambda __rows: __rows[2])
+    if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
+    
+    temp = ''
+    sending = 0
+    _buttons = []
+    for row in rows:
+        sending +=1
+        id,author_sort,title,path,name,format = row
+        #logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
+        file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+        temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending,name,id)
 
-	if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
-	
-	temp = ''
-	
-	sending = 0
-	_buttons = []
-	for row in rows:
-		sending +=1
-		id,author_sort,title,path,name,format = row
-		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
-		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending,name,id)
+    if rows:
+        await msg.edit("Seleccione un libro para descargar:\n" + temp)
+    else: await msg.edit('No se encontraron resultados')
 
-	if rows:
-		await msg.edit("Seleccione un libro para descargar:\n" + temp)
-	else: await msg.edit('No se encontraron resultados')
+    group_id = message.chat_id
+    date = time.strftime("%Y-%m-%d %H:%M:%S")
+    cursor_history = con_history.cursor()
+    cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, search_title, 'title', date))
+    con_history.commit()
 
-async def getAuthors(con,message,title):
+async def getAuthors(con,message,title,username,user_id):
 
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
@@ -284,7 +274,7 @@ async def getAuthors(con,message,title):
 
 	if title != '/autor': 
 		cursorObj.execute('''select authors.id, authors.name, authors.sort ,count(authors.id) as count from authors
-							where authors.sort LIKE '%{}%' 
+							where authors.sort LIKE '%{}%'
 							group by authors.id
 							limit 30
 							'''.format(title))
@@ -322,7 +312,14 @@ async def getAuthors(con,message,title):
 		await msg.edit("Seleccione un Autor:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
-async def getSeries(con,message,title):
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, title, 'author', date))
+	con_history.commit()
+
+
+async def getSeries(con,message,title,username,user_id):
 
 	logger.info("getSeries[{}]".format(title))
 	cursorObj = con.cursor()
@@ -330,7 +327,7 @@ async def getSeries(con,message,title):
 
 	if title != '/serie' and title != '/series': 
 		cursorObj.execute('''select series.id, series.name, series.sort 
-                    			from series
+                    				from series
 								where series.sort LIKE '%{}%' 
 								limit 30 '''.format(title))
 	else:
@@ -356,7 +353,14 @@ async def getSeries(con,message,title):
 		await msg.edit("Seleccione una Serie:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
-async def getSeriesbyAutor(con,message,title):
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, title, 'series', date))
+	con_history.commit()
+
+
+async def getSeriesbyAutor(con,message,title,username,user_id):
 
 	logger.info("getSeriesbyAutor[{}]".format(title))
 	cursorObj = con.cursor()
@@ -364,37 +368,37 @@ async def getSeriesbyAutor(con,message,title):
 
 	if title != '/serieautor': 
 		cursorObj.execute('''select 
-                    			books.id, 
-                       			books.author_sort,
-                          		series.name,
-								books_series_link.series,
-        						books_authors_link.author,
-              					count(books.series_index) as count
-							from books
-								INNER JOIN books_authors_link
-								ON books_authors_link.book = books.id
-								INNER JOIN books_series_link
-								ON books_series_link.book = books.id
-								INNER JOIN series
-								ON series.id = books_series_link.series
-								where books.author_sort like "%{}%"
-								GROUP BY books_series_link.series
-								order by books.author_sort,books_series_link.series
-								limit 30
-						'''.format(title))
+                    						books.id, 
+                       						books.author_sort,
+                          						series.name,
+										        books_series_link.series,
+        										books_authors_link.author,
+              										count(books.series_index) as count
+											from books
+												INNER JOIN books_authors_link
+												ON books_authors_link.book = books.id
+												INNER JOIN books_series_link
+												ON books_series_link.book = books.id
+												INNER JOIN series
+												ON series.id = books_series_link.series
+												where books.author_sort like "%{}%"
+												GROUP BY books_series_link.series
+												order by books.author_sort,books_series_link.series
+												limit 30
+										'''.format(title))
 	else:
 		cursorObj.execute('''select books.id, books.author_sort,series.name,
-							books_series_link.series,books_authors_link.author,count(books.series_index) as count
-							from books
-							INNER JOIN books_authors_link
-							ON books_authors_link.book = books.id
-							INNER JOIN books_series_link
-							ON books_series_link.book = books.id
-							INNER JOIN series
-							ON series.id = books_series_link.series
-							--where books.author_sort like "%king%"
-							GROUP BY books_series_link.series
-							order by RANDOM() limit 50'''.format(title))
+												books_series_link.series,books_authors_link.author,count(books.series_index) as count
+												from books
+											INNER JOIN books_authors_link
+											ON books_authors_link.book = books.id
+											INNER JOIN books_series_link
+											ON books_series_link.book = books.id
+											INNER JOIN series
+											ON series.id = books_series_link.series
+											--where books.author_sort like "%king%"
+											GROUP BY books_series_link.series
+											order by RANDOM() limit 50'''.format(title))
 
 
 	__rows = cursorObj.fetchall()
@@ -415,58 +419,71 @@ async def getSeriesbyAutor(con,message,title):
 		await msg.edit("Seleccione una Serie:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, title, 'series_by_author', date))
+	con_history.commit()
 
 
-async def getBooksbyAutor(con,message,BooksbyAutor):
 
-	logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
-	cursorObj = con.cursor()
-	msg = await message.edit('Buscando...')
+async def getBooksbyAutor(con,message,BooksbyAutor,username,user_id):
 
-	if BooksbyAutor == '': 
-		await message.edit('No se encontraron resultados')
-		return 
+    logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
+    cursorObj = con.cursor()
+    msg = await message.edit('Buscando...')
 
-	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
-							from books
-							INNER JOIN data	
-							ON books.id = data.book
-							INNER JOIN books_authors_link
-							ON books_authors_link.book = books.id
-							where books_authors_link.author = {}
-							order by books.author_sort,books.title 
-							-- limit 150						
-					'''.format(BooksbyAutor))
+    if BooksbyAutor == '': 
+        await message.edit('No se encontraron resultados')
+        return 
 
-	rows = cursorObj.fetchall()
+    cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format 
+                        from books
+                        INNER JOIN data	
+                        ON books.id = data.book
+                        INNER JOIN books_authors_link
+                        ON books_authors_link.book = books.id
+                        where books_authors_link.author = {}
+                        order by books.author_sort,books.title 
+                        -- limit 150
+                    '''.format(BooksbyAutor))
 
-	if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
-	
-	__temp = ''
-	
-	sending = 0
-	for row in rows:
-		sending +=1
-		id,author_sort,title,path,name,format = row
-		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
-		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
-		__temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending, name,id)
+    rows = cursorObj.fetchall()
 
-	if rows:
-		#await msg.edit("Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,temp))
+    if rows: await msg.edit('Enviando {} Resultados....'.format(len(rows)))
+    
+    __temp = ''
+    
+    sending = 0
+    for row in rows:
+        sending +=1
+        id,author_sort,title,path,name,format = row
+        #logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
+        file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+        __temp += "[{}] \U0001F4DA {} /bm{} \n".format(sending, name,id)
 
-		tmp = "Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,__temp)
-		text, entities = markdown.parse(tmp)
+    if rows:
+        #await msg.edit("Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,temp))
 
-		for text, entities in split_text(text, entities):
-			await message.reply(text, formatting_entities=entities)
+        tmp = "Seleccione un libro para descargar: /tdax{} (TODO)\n{}".format(BooksbyAutor,__temp)
+        text, entities = markdown.parse(tmp)
 
-  
-  
-  
-	else: await msg.edit('No se encontraron resultados')
+        for text, entities in split_text(text, entities):
+            await message.reply(text, formatting_entities=entities)
 
-async def getBooksbySeries(con,message,getBooksbySeries):
+        group_id = message.chat_id
+
+        date = time.strftime("%Y-%m-%d %H:%M:%S")
+        cursor_history = con_history.cursor()
+        cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, author_sort, 'books_by_author', date))
+        con_history.commit()
+
+
+
+    else: await msg.edit('No se encontraron resultados')
+
+
+async def getBooksbySeries(con,message,getBooksbySeries,username,user_id):
 	logger.info("getBooksbySeries[{}]".format(getBooksbySeries))
 
 	if getBooksbySeries == '': 
@@ -476,14 +493,16 @@ async def getBooksbySeries(con,message,getBooksbySeries):
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
 
-	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format,books.series_index
-							from books
-							INNER JOIN data	
-							ON books.id = data.book
-							INNER JOIN books_series_link
-							ON books_series_link.book = books.id
-							where books_series_link.series = {}
-							order by books.author_sort,books.series_index,books.title
+	cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format,books.series_index,series.sort
+						from books
+						INNER JOIN data	
+						ON books.id = data.book
+						INNER JOIN series	
+						ON series.id = books_series_link.series
+						INNER JOIN books_series_link
+						ON books_series_link.book = books.id
+						where books_series_link.series = {}
+						order by books.author_sort,books.series_index,books.title
 					'''.format(getBooksbySeries))
 
 	rows = cursorObj.fetchall()
@@ -493,10 +512,10 @@ async def getBooksbySeries(con,message,getBooksbySeries):
 	__temp = ''
 	
 	sending = 0
-
+	sort = ''
 	for row in rows:
 		sending +=1
-		id,author_sort,title,path,name,format,series_index = row
+		id,author_sort,title,path,name,format,series_index,sort = row
 		#logger.info("{}{}{}{}{}{}".format(id,author_sort,title,path,name,format))
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
 		
@@ -512,13 +531,19 @@ async def getBooksbySeries(con,message,getBooksbySeries):
 
 	else: await msg.edit('No se encontraron resultados')
 
-async def getBooksAll(con,message,title):
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, sort, 'books_by_series', date))
+	con_history.commit()
 
-	logger.info("getBooksAll[{}]".format(title))
+async def getBooksAll(con,message,search_title,username,user_id):
+
+	logger.info("getBooksAll[{}]".format(search_title))
 	cursorObj = con.cursor()
 	msg = await message.edit('Buscando...')
 
-	if title == '': 
+	if search_title == '': 
 		await msg.edit('No se encontraron resultados')
 		return 
 
@@ -527,7 +552,7 @@ async def getBooksAll(con,message,title):
 							INNER JOIN data	
 							ON books.id = data.book
 							where data.name LIKE '%{}%' 
-							order by books.author_sort,books.title limit 30'''.format(title))
+							order by books.author_sort,books.title limit 30'''.format(search_title))
 
 
 	rows = cursorObj.fetchall()
@@ -548,7 +573,13 @@ async def getBooksAll(con,message,title):
 		await msg.edit("Seleccione un libro para descargar:\n" + temp)
 	else: await msg.edit('No se encontraron resultados')
 
-async def getAllBooksbyAutor(con,message,BooksbyAutor):
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, search_title, 'all_books', date))
+	con_history.commit()
+
+async def getAllBooksbyAutor(con,message,BooksbyAutor,username,user_id):
 
 	logger.info("getBooksbyAutor[{}]".format(BooksbyAutor))
 	real_id = get_peer_id(message.peer_id)
@@ -602,9 +633,17 @@ async def getAllBooksbyAutor(con,message,BooksbyAutor):
 
 	if rows:
 		await msg.edit("Seleccione un libro para descargar: /tdax{}\n{}".format(BooksbyAutor,temp))
+
+		group_id = message.chat_id
+		date = time.strftime("%Y-%m-%d %H:%M:%S")
+		cursor_history = con_history.cursor()
+		cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, author_sort, 'all_books_by_author', date))
+		con_history.commit()
+
 	else: await msg.edit('No se encontraron resultados')
 
-async def getAllBooksbySeries(con,message,getAllBooksbySeries):
+
+async def getAllBooksbySeries(con,message,getAllBooksbySeries,username,user_id):
 	logger.info("getAllBooksbySeries[{}]".format(getAllBooksbySeries))
 	real_id = get_peer_id(message.peer_id)
 	CID , peer_type = resolve_id(real_id)
@@ -617,10 +656,12 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	msg = await message.edit('Buscando...')
 
 	cursorObj.execute('''select books.id, books.author_sort, books.title, 
-							books.path,data.name,data.format,books.series_index,books.has_cover
+							books.path,data.name,data.format,books.series_index,books.has_cover,series.sort
 						from books
 						INNER JOIN data	
 						ON books.id = data.book
+                        INNER JOIN series
+                        ON series.id = books_series_link.series
 						INNER JOIN books_series_link
 						ON books_series_link.book = books.id
 						where books_series_link.series = {}
@@ -637,7 +678,7 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 	_buttons = []
 	for row in rows:
 		sending +=1
-		id,author_sort,title,path,name,format,series_index,has_cover = row
+		id,author_sort,title,path,name,format,series_index,has_cover,sort = row
 		
 		file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
 		if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
@@ -656,6 +697,11 @@ async def getAllBooksbySeries(con,message,getAllBooksbySeries):
 		await msg.edit("Seleccione un Libro para descargar: /tdse{}\n{}".format(getAllBooksbySeries,temp))
 	else: await msg.edit('No se encontraron resultados')
 
+	group_id = message.chat_id
+	date = time.strftime("%Y-%m-%d %H:%M:%S")
+	cursor_history = con_history.cursor()
+	cursor_history.execute("INSERT INTO searches (user_id, username, group_id, search_query, search_type, date) VALUES (?, ?, ?, ?, ?, ?)", (user_id, username, group_id, sort, 'all_books_by_series', date))
+	con_history.commit()
 
 def countBooks():
 	logger.info("countBooks[countBooks]")
@@ -698,10 +744,12 @@ async def worker(name):
 			CID , peer_type = resolve_id(real_id)
 
 			sender = await update.get_sender()
-			username = sender.username
+			username = sender.username if sender.username else ''
 
 			logger.info("worker ==> [{id}][{username}][{message}]".format(message=msg,id=CID,username=username))
 
+			user_id =  update.from_id.user_id if update.from_id else CID
+			logger.info("worker ==> user_id [{user_id}]".format(user_id=user_id))
 
 			if update.message.message not in command_tasks:
 				command_tasks.append(update.message.message)
@@ -714,22 +762,22 @@ async def worker(name):
 				if ((update.message.message).startswith('/title')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /title")
-					rest = await getBooksTitle(con,message,msg.replace('/title ',''))
+					rest = await getBooksTitle(con,message,msg.replace('/title ',''),username,user_id)
 				
 				elif ((update.message.message).startswith('/autor')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS /autor:[%s]",msg)
-					rest = await getAuthors(con,message,msg.replace('/autor ',''))
+					rest = await getAuthors(con,message,msg.replace('/autor ',''),username,user_id)
 					
 				elif ((update.message.message).startswith('/serieautor')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND serieautor :[%s]",msg)
-					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''))
+					rest = await getSeriesbyAutor(con,message,msg.replace('/serieautor ',''),username,user_id)
 
 				elif ((update.message.message).startswith('/serie')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND SERIES :[%s]",msg)
-					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''))
+					rest = await getSeries(con,message,msg.replace('/serie ','').replace('/series ',''),username,user_id)
 
 
 				
@@ -738,65 +786,55 @@ async def worker(name):
 					message = await update.reply('Search in queue...')
 					m = re.search('/bm(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbyID(con,message,m.group(1))
+						rest = await getBooksbyID(con,message,m.group(1),username,user_id)
 						#await update.reply('Todos los archivos enviados')
 					else:
-						rest = await getBooksbyID(con,message,msg.replace('/bm',''))
-						#await update.reply('Todos los archivos enviados')
+						rest = await getBooksbyID(con,message,msg.replace('/bm',''),username,user_id)
 		
 				elif ((update.message.message).startswith('/ax')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/ax(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbyAutor(con,message,m.group(1))
+						rest = await getBooksbyAutor(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''))
+						rest = await getBooksbyAutor(con,message,msg.replace('/ax',''),username,user_id)
 
 				elif ((update.message.message).startswith('/se')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/se(.+?)(?=@).*', msg)
 					if m:
-						rest = await getBooksbySeries(con,message,m.group(1))
+						rest = await getBooksbySeries(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getBooksbySeries(con,message,msg.replace('/se',''))
+						rest = await getBooksbySeries(con,message,msg.replace('/se',''),username,user_id)
 
 
 				elif ((update.message.message).startswith('/all')):
 					message = await update.reply('Search in queue...')
 					logger.info("SEND BOOKS :[%s]",msg)
-					rest = await getBooksAll(con,message,msg.replace('/all ',''))
+					rest = await getBooksAll(con,message,msg.replace('/all ',''),username,user_id)
 					logger.info("FINISH SEND BOOKS :[%s]",msg)
 
 				elif ((update.message.message).startswith('/tdax')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdax(.+?)(?=@).*', msg)
 					if m:
-						rest = await getAllBooksbyAutor(con,message,m.group(1))
-						#await update.reply('Todos los archivos enviados')
+						rest = await getAllBooksbyAutor(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''))
-						#await update.reply('Todos los archivos enviados')
+						rest = await getAllBooksbyAutor(con,message,msg.replace('/tdax',''),username,user_id)
 
 				elif ((update.message.message).startswith('/tdse')):
 					message = await update.reply('Search in queue...')
 					m = re.search('/tdse(.+?)(?=@).*', msg)
 					if m:
-						rest = await getAllBooksbySeries(con,message,m.group(1))
-						#await update.reply('Todos los archivos enviados')
+						rest = await getAllBooksbySeries(con,message,m.group(1),username,user_id)
 					else:
-						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''))
-						#await update.reply('Todos los archivos enviados')
+						rest = await getAllBooksbySeries(con,message,msg.replace('/tdse',''),username,user_id)
 
-				#else:
-					#await message.edit('Busqueda incorrecta, use /help para más ayuda')
 
 				command_tasks.remove(update.message.message)
-				#logger.info(command_tasks)
 			else:
 				logger.info('EXIST ELEMENTE: %s ', update.message.message)
 				message = await update.reply('Ya existe una busqueda con estos parametros...')
-
-			#logger.info(f"OUT worker ['worker']")
 
 		except Exception as e:
 			command_tasks.remove(update.message.message)
@@ -811,6 +849,74 @@ async def worker(name):
 		queue.task_done()
 
 
+async def CONVERTS_BOOKS(message,file,name):
+	try:
+
+		logger.info("init CONVERTS_BOOKS  {}".format(file))
+		real_id = get_peer_id(message.peer_id)
+		CID , peer_type = resolve_id(real_id)
+		
+		mobi = os.path.join('/mobi', '{}.{}'.format(name,'mobi'))
+
+		if not os.path.exists(mobi):
+			await message.edit('Convirtiendo a mobi...')
+
+			kill = lambda processss: processss.kill()
+
+			#process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle","--linearize-tables","--smarten-punctuation","--enable-heuristics",], stdout=subprocess.PIPE, universal_newlines=True)
+			process = subprocess.Popen(["ebook-convert",file,mobi,"--prefer-author-sort","--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
+			
+			my_timer = threading.Timer(TG_TIMEOUT, kill, [process])
+
+			try:
+				my_timer.start()
+
+				while True:
+					nextline = process.stdout.readline()
+					if nextline == '' and process.poll() is not None:
+						break
+					sys.stdout.write(nextline)
+					sys.stdout.flush()
+
+				stdout, stderr = process.communicate()
+				exitCode = process.returncode
+
+				if os.path.exists(mobi):
+					logger.info("MOBI: {}".format(mobi))
+					await message.edit("Enviando archivo mobi...")
+					await tg_send_file(CID,mobi,name)
+			finally:
+				logger.info('CONVERTS_BOOKS TIMEOUT: Books Upload: ')
+				my_timer.cancel()
+
+
+		else:
+			await message.edit("Enviando archivo mobi...")
+			await tg_send_file(CID,mobi,name)
+
+
+	except Exception as e:
+		logger.info('CONVERTS_BOOKS ERROR: %s Books Upload: %s' % (e.__class__.__name__, str(e)))
+
+	logger.info("finish CONVERTS_BOOKS {}".format(file))
+
+@events.register(events.NewMessage(func=lambda e: e.document))
+async def handler_convert(update):
+	try:
+		real_id = get_peer_id(update.message.peer_id)
+		CID , peer_type = resolve_id(real_id)
+
+		if TG_AUTHORIZED_CONVERT_USER_ID and CID == int(TG_AUTHORIZED_CONVERT_USER_ID):
+			if update.message.document.mime_type == 'application/epub+zip':
+				message = await update.reply('Descargando archivo...')
+				file_name = update.message.document.attributes[0].file_name
+				file_path = os.path.join('/imports', file_name)
+				await client.download_media(update.message, file_path)
+				await CONVERTS_BOOKS(message, file_path, os.path.splitext(file_name)[0])
+	except Exception as e:
+		message = await update.reply('ERROR: ' + str(e))
+		logger.info('EXCEPTION USER: %s ', str(e))
+
 @events.register(events.NewMessage)
 async def handler(update):
 	global temp_completed_path
@@ -821,7 +927,7 @@ async def handler(update):
 		real_id = get_peer_id(update.message.peer_id)
 		CID , peer_type = resolve_id(real_id)
 
-		if not TG_AUTHORIZED_USER_ID or CID in usuarios:
+		if not TG_AUTHORIZED_USER_ID or CID in usuarios or CID == convert_user:
 			if update.message.message == '/help' or update.message.message == '/start':
 				message = await update.reply(HELP) 
 			elif update.message.message == '/version': 
@@ -844,6 +950,93 @@ async def handler(update):
 		message = await update.reply('ERROR: ' + str(e))
 		logger.info('EXCEPTION USER: %s ', str(e))
 
+@client.on(events.CallbackQuery)
+async def callback_query_handler(event):
+    query_data = event.data.decode('utf-8')
+    if query_data.startswith('send_epub_'):
+        try:
+            book_id = query_data.replace('send_epub_', '')
+            await event.answer("Enviando EPUB...", alert=False)
+            # Retrieve book details and send EPUB
+            cursorObj = con.cursor()
+            cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
+                                    from books
+                                    INNER JOIN data
+                                    ON books.id = data.book
+                                    INNER JOIN comments
+                                    ON books.id = comments.book
+                                    where books.id = {} and books.id = comments.book
+                                    order by books.author_sort,books.title limit 1'''.format(book_id))
+            row = cursorObj.fetchone()
+            if row:
+                id,author_sort,title,path,name,format,has_cover,text = row
+                file = os.path.join(TG_BOOKS_PATH,path, '{}.{}'.format(name,format.lower()))
+                if os.path.exists(file):
+                    resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+                    await event.edit(resena)
+                    await tg_send_file(event.chat_id,file,name)
+                    await event.reply('Archivos enviados...')
+
+                    group_id = event.chat_id
+                    date = time.strftime("%Y-%m-%d %H:%M:%S")
+                    cursor_history = con_history.cursor()
+                    cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date, extension) VALUES (?, ?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date, 'epub'))
+                    con_history.commit()
+            else:
+                await event.edit('Libro no encontrado.')
+        except Exception as e:
+            pass
+    elif query_data.startswith('send_mobi_'):
+        try:
+            book_id = query_data.replace('send_mobi_', '')
+            # Retrieve book details, convert to MOBI and send
+            cursorObj = con.cursor()
+            cursorObj.execute('''select books.id, books.author_sort, books.title, books.path,data.name,data.format, books.has_cover, comments.text
+                                    from books
+                                    INNER JOIN data
+                                    ON books.id = data.book
+                                    INNER JOIN comments
+                                    ON books.id = comments.book
+                                    where books.id = {} and books.id = comments.book
+                                    order by books.author_sort,books.title limit 1'''.format(book_id))
+            row = cursorObj.fetchone()
+            if row:
+                id,author_sort,title,path,name,format,has_cover,text = row
+                resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+                await event.edit(resena)
+                await event.answer("Convirtiendo a MOBI y enviando...", alert=False)
+                msgr = await event.reply('convirtiendo a mobi...')
+                epub_file = os.path.join(TG_BOOKS_PATH,path, '{}.epub'.format(name)) # Assuming original is epub
+                mobi_file = os.path.join('/tmp', '{}.mobi'.format(name)) # Temporary path for mobi
+
+                if os.path.exists(epub_file):
+                    # Convert to mobi
+                    process = subprocess.Popen(["ebook-convert", epub_file, mobi_file, "--prefer-author-sort", "--output-profile=kindle"], stdout=subprocess.PIPE, universal_newlines=True)
+                    stdout, stderr = process.communicate()
+                    exitCode = process.returncode
+
+                    if exitCode == 0 and os.path.exists(mobi_file):
+                        if has_cover: cover = os.path.join(TG_BOOKS_PATH,path, '{}'.format('cover.jpg'))
+                        if os.path.exists(cover):
+                            resena = "{}".format(text[:max_text] + "...") if len(text) > max_text else text
+                        await tg_send_file(event.chat_id,mobi_file,name)
+                        await msgr.delete()
+                        await event.reply('Archivos enviados...')
+
+                        group_id = event.chat_id
+                        date = time.strftime("%Y-%m-%d %H:%M:%S")
+                        cursor_history = con_history.cursor()
+                        cursor_history.execute("INSERT INTO downloads (user_id, username, group_id, author, book, date, extension) VALUES (?, ?, ?, ?, ?, ?, ?)", (event.sender_id, event.sender.username, group_id, author_sort, title, date, 'mobi'))
+                        con_history.commit()
+                        os.remove(mobi_file) # Clean up temporary mobi file
+                    else:
+                        await event.edit('Error al convertir a MOBI.')
+                else:
+                    await event.edit('Archivo EPUB no encontrado para convertir.')
+            else:
+                await event.edit('Libro no encontrado.')
+        except Exception as e:
+            pass    
 try:
 	# Crear cola de procesos concurrentes.
 	tasks = []
@@ -856,6 +1049,7 @@ try:
 	# Arrancamos bot con token
 	client.start(bot_token=str(bot_token))
 	client.add_event_handler(handler)
+	client.add_event_handler(handler_convert)
 
 	# Pulsa Ctrl+C para detener
 	loop.run_until_complete(tg_send_message(f"Calibre Upload Started: \n - {VERSION}\n - Se encontraron {countBooks()} libros"))
@@ -866,13 +1060,12 @@ try:
 
 	client.run_until_disconnected()
 finally:
-	# Cerrando trabajos.
-	
-	#f.close()
-	for task in tasks:
-		task.cancel()
-	# Cola cerrada
-	# Stop Telethon
-	client.disconnect()
-	logger.info("********** STOPPED **********")
-	
+    # Cerrando trabajos.
+    
+    #f.close()
+    for task in tasks:
+        task.cancel()
+    # Cola cerrada
+    # Stop Telethon
+    client.disconnect()
+    logger.info("********** STOPPED **********")

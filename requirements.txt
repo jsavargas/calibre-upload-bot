@@ -1,3 +1,2 @@
-cryptg 
-telethon 
-telethon[cryptg]
+telethon
+python-dotenv
